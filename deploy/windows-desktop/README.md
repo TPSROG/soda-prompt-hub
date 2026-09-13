@@ -1,7 +1,11 @@
 # Soda Prompt Hub Windows Desktop
 
 这是 Windows 完整单机版的图形启动台。它用 `.NET 8 + WinForms + WebView2` 承载共享 Desktop UI，
-在同一台 Windows 上管理 Prompt Hub Core，并可选启动本机 Compute Worker。
+在同一台Windows上管理Prompt Hub Core，默认自动准备并启动本机Compute Worker。用户可手动停止本机Worker，
+但不需要再开独立的Soda Compute Worker，也不经过SMB配对。
+
+普通用户请从[Windows单机Release](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-windows-standalone-20260913)
+下载Setup，按[快速开始](../../docs/QUICK_START.md)安装；下方构建命令仅供维护人员。
 
 ## 产品行为
 
@@ -11,7 +15,8 @@
   `setup.log`。
 - Core 日志位于 `%LOCALAPPDATA%\Soda Prompt Hub\Logs\core.log`。
 - 用户资料位于 `%USERPROFILE%\Documents\Soda Prompt Hub\prompt-library`。
-- 本机计算配置固定使用 `%USERPROFILE%\Documents\Soda Prompt Hub\Bridge\prompt-hub`，继续复用现有 bridge 协议。
+- 本机任务目录固定使用 `%USERPROFILE%\Documents\Soda Prompt Hub\Bridge\prompt-hub`，继续复用现有 bridge 协议。
+- 单机Worker配置存于 `%LOCALAPPDATA%\Soda Prompt Hub\Desktop Worker`，与独立Worker的Compute Worker目录分离。
 - 外部 Core 或 Worker 只显示状态，不会被启动器接管或强制停止。
 - 关闭窗口只收起到托盘；“退出启动器”保留服务；只有“退出并停止本机服务”会停止当前启动器持有的进程。
 

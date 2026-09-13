@@ -21,8 +21,8 @@ Soda Prompt Hub 使用 `主版本.次版本.修订版本`：
 
 | 版本 | 来源 | 作用 |
 |---|---|---|
-| 程序版本 | `pyproject.toml` 包元数据 | Mac 应用功能 |
-| 发布通道 | 由程序版本推导 | 正式、候选或开发 |
+| 程序版本 | `pyproject.toml` 包元数据 | Core / WebUI 的软件版本 |
+| 运行时通道 | 由程序版本推导 | 软件内显示的正式、候选或开发，不是安装包验收状态 |
 | 数据结构版本 | SQLite `schema_migrations` | 个人数据库迁移状态 |
 | Worker 版本与协议 | Worker `RELEASE.json` | Windows 执行器及通信兼容性 |
 
@@ -30,7 +30,7 @@ Soda Prompt Hub 使用 `主版本.次版本.修订版本`：
 
 ## 发布元数据
 
-根目录 `RELEASE.json` 描述 Mac 程序版本、Python 版本和配套 Worker。`deploy/windows-worker/RELEASE.json`
+根目录 `RELEASE.json` 描述程序版本、Python 版本和配套 Worker。`deploy/windows-worker/RELEASE.json`
 描述 Worker 版本、发布通道和协议。自动测试要求它们与 `pyproject.toml` 保持一致。
 
 ## 桌面发行包
@@ -41,7 +41,8 @@ Soda Prompt Hub 使用 `主版本.次版本.修订版本`：
 - Windows Desktop：per-user Setup；
 - Windows Compute Worker：独立 per-user Setup。
 
-三个产品均把程序与个人数据分离。当前 1.1.0 商业候选包暂未做平台签名，首次运行的系统提示、系统要求、
+三个组件组成两套下载：Mac + 独立 Worker，以及 Windows 单机 Desktop（已管理本机 Worker）。
+均把程序与个人数据分离。当前 1.1.0 桌面验收构建暂未做正式平台签名，首次运行的系统提示、系统要求、
 文件大小和 SHA-256 必须随 Release 一起公布。详细边界见[商业分发与安装说明](COMMERCIAL_RELEASE.md)。
 
 便携 ZIP 继续作为维护和排错选项，不作为普通用户的首选安装路径。
@@ -83,5 +84,21 @@ ZIP 内文件时间和权限使用固定值；同一提交、同一工具链重�
 
 ## Git 标签与 Release
 
-正式版本使用 `v<版本>` 标签，例如 `v1.1.0`。标签必须指向通过检查的正式版本提交。Worker ZIP 的
-SHA-256 应随 GitHub Release 说明一起公布。已发布标签不移动；后续修复使用新的修订版本。
+正式版本使用 `v<版本>` 标签，例如 `v1.1.0`。已发布标签和附件不移动、不覆盖；通常后续修复使用新的修订版本。
+
+### 2026-09-13：同版本桌面验收构建
+
+本轮经维护者明确决定保持软件 `1.1.0`，用独立构建标签区分两套附件：
+
+| 下载 | Git tag | 对应源码 |
+| --- | --- | --- |
+| [Mac + Windows Worker](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-mac-windows-20260913) | `v1.1.0-mac-windows-20260913` | `5f5e885` |
+| [Windows 单机](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-windows-standalone-20260913) | `v1.1.0-windows-standalone-20260913` | `5f5e885` |
+
+两条 GitHub Release 标为 **Pre-release**，没有取代9月9日 `v1.1.0` 的 Latest 标记。
+软件内仍显示 `1.1.0 / stable`，这是运行时元数据，不代表新桌面包已完成原生人工验收。
+用户应同时核对 Release 日期、使用模式、commit 和 `SHA256SUMS`，不能只比较界面版本号。
+这些带模式/日期的 Git tag 不是 Python 包版本，不写入 `pyproject.toml`。
+
+以后同版本构建也必须先确认独立的构建标识，绑定准确源码，公开测试范围、签名状态与每个附件的哈希；
+不得移动本次标签或用新文件覆盖旧包。原生验收未完成时保留 Pre-release，并明确待测项。

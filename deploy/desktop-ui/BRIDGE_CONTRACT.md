@@ -40,6 +40,8 @@ window.SodaDesktop.receiveStatus(status)
 | `exportDiagnostics` | `{}` | `{ path, message }` | Windows 导出白名单状态、发布元数据与脱敏日志尾部，明确排除配置、数据库、任务和素材 |
 | `openDataFolder` | `{}` | `{ status }` | 打开现有用户资料根目录，不创建或迁移数据 |
 | `hideWindow` | `{}` | `{ status }` | 收起启动器窗口，后台服务继续运行 |
+| `stopServiceAndQuit` | `{}` | `{ status }` | Mac先确认请求，再异步安全停Core并退出；回执不等于已停服 |
+| `toggleLocalWorker` | `{}` | `{ status }` | Windows Desktop切换本机Worker；不是启动独立Worker控制台 |
 | `startWorker` | `{}` | `{ status }` | 无窗口启动当前目录中已验证配置的 Worker |
 | `stopWorker` | `{}` | `{ status }` | 只停止当前宿主持有且没有执行任务的 Worker |
 | `selfTestWorker` | `{}` | `{ status }` | Worker 停止时运行独立自检 |
@@ -47,18 +49,32 @@ window.SodaDesktop.receiveStatus(status)
 | `getWorkerConfig` | `{}` | `{ config }` | 读取可视化设置所需的白名单字段 |
 | `chooseFolder` | `{ "initial": "..." }` | `{ path }` | 只调用系统目录选择器，不直接采用 UI 任意路径 |
 | `saveWorkerConfig` | `{ "config": { ... } }` | `{ status }` | 校验本机 URL 与绝对路径，备份后原子保存白名单字段 |
+| `getPairingInfo` | `{}` | `{ host, bridgeRoot, shareFolder, compatible, addresses, detail }` | 独立Worker读取共享建议，不创建共享、不保存凭据 |
+| `openShareFolder` | `{}` | `{ message }` | 独立Worker打开待共享文件夹，权限由用户在系统确认 |
+| `copyPairingAddress` | `{}` | `{ message }` | 独立Worker复制检测到的第一个SMB地址，无地址则拒绝；不含密码 |
 
 未知 method 必须拒绝。Web UI 不接受任意 shell、路径或 URL 参数。
+
+### 宿主支持范围
+
+- 三端共有：`getStatus`、`openLogs`、`openDataFolder`、`hideWindow`。
+- Mac与Windows Desktop：`openWorkspace`、`retryCore`、`restartCore`。
+- 仅Mac：`checkConnection`、`reconnectDevice`、`openDeviceSettings`、`stopServiceAndQuit`。
+- 两个Windows宿主：`exportDiagnostics`、`openConfig`、`getWorkerConfig`、`chooseFolder`、`saveWorkerConfig`。
+- 仅Windows Desktop：`toggleLocalWorker`；使用独立的Desktop Worker配置目录。
+- 仅独立Worker：`startWorker`、`stopWorker`、`selfTestWorker`、`getPairingInfo`、`openShareFolder`、`copyPairingAddress`。
+
+Windows“退出并停止本机服务/Worker”是原生托盘行为，不是Mac的`stopServiceAndQuit`方法。
 
 ## Status model
 
 ```json
 {
-  "phase": "checking | starting | ready | attention",
+  "phase": "checking | starting | ready | attention | stopping",
   "step": 1,
   "stepTitle": "正在确认服务身份",
   "stepDetail": "127.0.0.1:8765",
-  "coreState": "CHECKING | STARTING | READY | ERROR",
+  "coreState": "CHECKING | STARTING | READY | ERROR | STOPPING",
   "coreDetail": "127.0.0.1:8765",
   "libraryState": "LOCAL",
   "libraryDetail": "Documents / Soda Prompt Hub",
@@ -69,6 +85,7 @@ window.SodaDesktop.receiveStatus(status)
   "checkedAt": "12:33:13",
   "canOpenWorkspace": false,
   "canRestart": false,
+  "canStop": false,
   "errorTitle": "",
   "errorDetail": ""
 }
@@ -79,6 +96,14 @@ Windows Worker 模式在同一对象中增加 `comfyState`、`comfyDetail`、`ta
 Worker 未启动）和 `busy`（已领取任务）。宿主仍必须忽略 UI 传入的路径或命令参数。
 
 `phase` 是 UI 状态机的唯一主状态。颜色只辅助表达，正文状态必须始终可读。
+
+Mac的`canStop`表示已确认Core进程身份且没有正在停服，不要求Core一定由本次App新启动；
+`canRestart`仍要求宿主持有运行中的子进程。停服前复核用户、端口、命令与启动时间，只请求正常退出，
+最多等待10秒；超时/身份变化显示错误，不按端口强杀。`stopping/STOPPING`期间禁用重复停服。
+Mac状态还包含`connectionState`、`connectionLabel`、`connectionDetail`、`connectionDevice`、
+`connectionCheckedAt`和`connectionNotice`；它们来自连接检查，不等于历史自检结果。
+
+这里的`releaseChannel`是运行时软件通道，不能用于推断GitHub安装包是否Pre-release或已完成手动验收。
 
 ## Browser preview
 

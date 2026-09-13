@@ -1,5 +1,14 @@
 # Prompt Hub Windows Worker
 
+## 先看你拿到哪种包
+
+- 普通用户使用[Mac + Windows Worker Release](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-mac-windows-20260913)中的Worker Setup：内置Python，从开始菜单打开控制台，不要求运行bat或自行装Python。
+- Windows单机使用[Desktop Release](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-windows-standalone-20260913)，由同一个启动器管理Core/Worker，不另开独立Worker。
+- 本文下面的ZIP、脚本和Python准备步骤只适用于维护人员拿到的纯脚本/便携包；不代表2026-09-13 Release另有该ZIP附件。
+
+2026-09-13两套安装包均是保持软件1.1.0的Pre-release，未正式平台签名，完整原生手验待完成。
+下载安装前核对Release的SHA256SUMS；同1.1.0不等于相同构建。
+
 这个目录是可以独立放到 Windows 上运行的 Worker 发布包。它通过 SMB 共享目录接收 Mac 发来的
 任务，只访问 Windows 本机的 ComfyUI，不需要把 ComfyUI 开放到局域网。
 
@@ -26,20 +35,20 @@ Windows 可以共享 `D:\PromptHub-Bridge`；Mac 通过 Finder 挂载后可能�
 
 ## 第一次运行
 
-1. 从 GitHub Release 下载 `Soda-Prompt-Hub-Windows-Worker-<版本>.zip`，完整解压后再运行。
+1. 维护人员取得或按构建说明生成 `Soda-Prompt-Hub-Windows-Worker-<版本>.zip` 后，完整解压再运行。
 2. 右键 `校验发行包.ps1`，选择“使用 PowerShell 运行”；看到绿色 `[OK]` 后继续。
 3. 双击 `0-首次配置.bat`。它会保留已有配置，或从示例建立新的 `worker-config.json`。
 4. 按当前电脑的盘符修改 `bridge_root`、`lora_roots` 和 `model_roots`；不使用的模型类型可以删除。
 5. 启动 ComfyUI，并确认浏览器能打开 `http://127.0.0.1:8188`。
-6. 确认已安装 Python 3.12；当前实测版本是 3.12.10。
-7. 正式图形包可以直接双击 `Soda Compute Worker.exe`，在控制台点“运行自检”和“启动 Worker”。
+6. 纯脚本包需Python 3.12；Setup已经内置运行时，跳过此项。
+7. 图形包直接打开 `Soda Compute Worker.exe`，有效配置下自动接收任务；未运行时按设置提示启动。独立自检需先停Worker。
 8. 仅在图形启动器不可用或排障时，才双击 `1-先自检.bat` 和 `2-启动Worker.bat`。
 9. 图形启动器可收起到系统托盘；Worker 会在后台继续等待任务，不显示黑色命令窗口。
 
 自检写出的 `worker-status.json` 包含 `worker_build_sha256`，代表实际启动脚本的 SHA-256。任务成功
 或失败时，结果信封也会回显同一字段。它可以确认当前接任务的是刚同步的新版 Worker，而不是仍在
-后台运行的旧窗口。如果该值与共享目录当前 Worker 脚本的 SHA-256 不一致，请关闭所有旧 Worker
-窗口，再重新双击 `2-启动Worker.bat`。
+后台运行的旧实例。若脚本hash不符，先辨认并正常退出对应旧Worker，再从新快捷方式启动；纯脚本维护包才运行bat。
+历史自检不代表实时在线，Mac还会检查心跳与ComfyUI状态。
 
 需要接入 ComfyUI LoRA Manager 时，可在 PowerShell 运行 `3-检查LoRAManager.ps1`。脚本只读取插件
 源码、metadata/预览文件清单、ComfyUI 本机公开接口和 LoRA 目录统计，结果写入共享目录
@@ -60,7 +69,12 @@ VAE、Text Encoder、放大模型和 ControlNet 目录。Mac 任务只能使用�
 
 ## 升级 Worker
 
-1. 在旧 Worker 窗口按 `Ctrl+C`，不要直接覆盖仍在运行的目录。
+Setup安装版：任务空闲时从控制台/托盘停止Worker，退出旧应用，运行新Setup覆盖安装，再从新快捷方式打开。
+配置与日志保留；不需要从安装器目录手工复制配置。不要把单机Desktop Worker与独立Compute Worker配置混用。
+
+以下仅是便携维护包的迁移步骤：
+
+1. 图形包从控制台/托盘正常停止；纯脚本在窗口按 `Ctrl+C`。不要直接覆盖仍在运行的目录。
 2. 把新版 ZIP 解压到新目录，先运行 `校验发行包.ps1`。
 3. 将旧目录中真实的 `worker-config.json` 复制到新版目录。
 4. 运行新版 `1-先自检.bat`，通过后再运行 `2-启动Worker.bat`。
@@ -72,7 +86,7 @@ VAE、Text Encoder、放大模型和 ControlNet 目录。Mac 任务只能使用�
 ## 同步 LoRA 清单
 
 1. 保持 ComfyUI 和 Worker 运行。
-2. 在 Mac Prompt Hub 的“设备连接”页点击“从 Windows 同步”。
+2. 在 Mac Prompt Hub 的“设备连接 → LoRA”点击“更新清单”，观察任务进度。
 3. Worker 读取 ComfyUI `LoraLoader` 名称、模型文件属性、同名 `.metadata.json` 和关联的封面/示例图。
 4. 任务返回后，在任务卡点击“验收并导入 LoRA 清单”。
 5. Mac 逐文件校验 SHA-256，保存可检索清单与独立预览缓存；不会复制 `.safetensors`。
@@ -88,7 +102,7 @@ metadata 中有可靠的 Civitai model/version ID 或模型页 URL 时，Mac 会
 1. 在 `worker-config.json` 的 `model_roots` 中填写这台电脑真实的六类 ComfyUI 模型目录；没有的
    类型可以删除对应条目。
 2. 重新运行 `1-先自检.bat`，确认输出的 `model_roots` 中所需目录为 `exists: true`。
-3. 启动 Worker，在 Mac“设备连接 → ComfyUI 模型资产”点击“刷新模型清单”。
+3. 启动 Worker，在 Mac“设备连接”的底模子页面点击“更新清单”。
 4. 任务返回后，在任务卡点击“验收并导入模型清单”。
 5. Mac 会显示类型、文件夹、名称、大小、修改时间和可用的同名示例图，不会复制模型权重。
 
@@ -136,7 +150,7 @@ Mac 投递时会在任务 manifest 中记录生成包的 SHA-256。Worker 校验
 
 - 图形版正常停止：托盘或控制台点“停止 Worker”；正在执行任务时会拒绝停止，等待回传后再操作。
 - 维护脚本正常停止：在 Worker 窗口按 `Ctrl+C`。
-- 意外关机：重新启动 ComfyUI，再双击 `2-启动Worker.bat`。Worker 会恢复 `processing` 中的任务。
+- 意外关机：重新启动ComfyUI和Worker应用；纯脚本维护包才使用 `2-启动Worker.bat`。Worker会检查`processing`记录并尝试恢复，不代表任务必定成功。
 - 已拿到 `prompt_id` 的任务会继续查询原任务，不重新排队。
 - 单机锁会阻止同时打开两个 Worker，避免一张 GPU 重复领取。
 

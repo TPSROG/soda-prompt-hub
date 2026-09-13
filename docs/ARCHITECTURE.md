@@ -2,7 +2,19 @@
 
 ## 一句话理解
 
-Mac 是资料和审核中枢，SMB 是运输通道，Windows Worker 是取件员，ComfyUI 是绘图执行器。
+运行WebUI服务的设备是资料和审核中枢；Worker领取任务，ComfyUI执行绘图。
+产品支持Mac管理Windows和Windows单机两种方式，不要求Windows单机再配对另一台设备。
+
+## Windows 单机
+
+Soda Prompt Hub启动器在同台Windows上管理Core与本机Worker，使用本地bridge目录交换任务，不需要SMB。
+项目、Prompt、结果、审核和冻结版本保存在Windows个人资料目录。ComfyUI由用户自行启动。
+数据集可直接打开本地文件夹或下载ZIP，不显示跨设备复制入口。
+
+## Mac 管理 Windows
+
+本节以下的SMB回路适用于双机：Mac保存项目与审核，Windows独立Worker使用本机ComfyUI；
+模型与原有训练工具留在Windows。单机与独立Worker配置分别位于Desktop Worker和Compute Worker目录，互不覆盖。
 
 ## 两台设备保存什么
 
@@ -54,11 +66,13 @@ Mac 从只读来源图片建立审核记录，冻结时创建独立版本副本�
 
 ## 更新怎样隔离数据
 
-- 程序更新：替换 `$HOME/Applications/Soda Prompt Hub` 中的代码和依赖。
+- 普通程序更新：Mac覆盖`/Applications/Soda Prompt Hub.app`，Windows运行对应Setup；升级前主动备份并停服。
 - 个人数据：保留在 Documents 下的 `prompt-library`。
 - 提示词 Git 来源：由“资料管理”独立更新。
-- Windows Worker：使用独立 ZIP 升级并保留真实 `worker-config.json`。
+- Windows Worker：双机使用独立Worker Setup；单机随Desktop维护。不混用旧便携目录，ZIP仅作为维护选项。
 - Windows 模型与训练：不随 Prompt Hub 代码升级。
+
+具体路径与保留边界见[安装说明](COMMERCIAL_RELEASE.md#程序与个人数据)。旧源码安装目录仅适用于维护脚本，不能当作DMG默认路径。
 
 ## 程序代码怎样分层
 

@@ -1,6 +1,8 @@
 # Soda Prompt Hub 跨平台桌面产品计划书
 
-> 文档状态：方案草案，可进入评审
+> 文档状态（2026-09-13）：桌面基础与三端安装包已实施并发布验收构建；完整新包原生手验待完成，签名延后。
+> 下载与当前行为见[快速开始](QUICK_START.md)，验收见[两模式清单](acceptance/manual-1.1.0-20260913.md)。
+> 历史方案中的A–E阶段、签名目标和检查框不等于当前全部完成；不将历史预期改写为验收证据。
 >
 > 适用范围：macOS Desktop、Windows Desktop、Windows Compute Worker
 >

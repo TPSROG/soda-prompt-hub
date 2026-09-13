@@ -2,9 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Soda Prompt Hub 是一个本机优先（local-first）的 AI 绘图创作与数据集中枢：Mac 上的 FastAPI 单体服务
-管理提示词、OC、视觉参考、创作项目、结果图和 LoRA 数据集，通过 SMB 共享目录把生成任务投递给一台
-Windows 5060 Ti 上的 ComfyUI Worker。训练本身不在本项目范围内。
+Soda Prompt Hub是本机优先的AI绘图创作与数据集中枢。FastAPI Core管理提示词、OC、项目、结果和数据集。
+当前只支持两种产品模式：Mac管理Windows（SMB + 独立Worker），Windows单机（一个启动器管理Core/Worker与本地bridge）。
+数据保存在运行Core的设备；单机不另开独立Worker、不需要配对。训练本身不在本项目范围内。
+当前1.1.0桌面包的tag、签名与验收状态见[版本体系](docs/RELEASES.md)，不能把软件内stable当作原生手验完成。
 
 仓库文档以中文为主（README、`docs/`、DEVELOPMENT_PLAN 等），代码标识符与注释用英文，
 面向用户的 UI 文案用中文。新增内容请沿用同一约定。
@@ -66,9 +67,10 @@ api.create_app()        → 构造全部 store、注册 router、在 lifespan �
 
 ### 前端：Python 字符串拼出来的单页应用
 
-没有前端构建、没有 npm、没有静态文件目录。整个 UI 是 `GET /` 返回的一个 HTML 字符串：
+业务WebUI无需npm构建，`GET /`返回组装后的HTML；已有包内资源目录`src/prompt_hub/web_assets`：
 
-- `web.py` 持有基础 `INDEX_HTML` 骨架，文件末尾用 `str.replace()` 把各页面模块注入 `</head>` / `</body>`；
+- `web.py`通过资源读取器加载`web_assets/index.html`、`base.css`、`base.js`并组装页面；首屏注入`windows_local`/`mac_remote`模式；
+- `creative_web.py`读取包内`creative.css`和`creative.js`，不是将整个创作页面直接写进Python；
 - 每个页面模块导出三个常量：`XXX_STYLES`（`<style>`）、`XXX_HTML`（markup）、`XXX_SCRIPT`（`<script>`）；
 - 页面模块：`creative_web.py`（+ `creative_web_layout.py`）、`workspace_web.py`、`lora_web.py`、
   `comfy_web.py`、`search_web.py`、`remote_web.py`、`source_center_web.py`。
@@ -98,18 +100,17 @@ api.create_app()        → 构造全部 store、注册 router、在 lifespan �
 Handler 签名是 `(payload, JobContext) -> dict`，必须**可取消、可恢复**：定期检查 context 以抛出
 `JobCancelledError`，并且重启后重跑同一任务时只处理未完成的条目（服务重启、暂停/继续都依赖这一点）。
 
-### Windows Worker 是独立单文件脚本
+### Windows Worker 源码分层，发布为单文件
 
-`src/prompt_hub/windows_worker.py` 会被复制到 Windows 上当作 `prompt_hub_worker.py` 直接运行
-（见 `deploy/windows-worker/`）。它**只允许使用标准库**——不能 import `prompt_hub` 的任何模块，也不能用
-numpy/Pillow/FastAPI。它和 Mac 端之间唯一的契约是 `compute_bridge.py` 里的 `compute_contract()`
-（`GET /api/compute/contract` 暴露），任务通过 SMB 上的 `outbox/inbox/processing/completed/failed`
-五个目录交换 JSON，结果靠 SHA-256 回验。改协议时必须同时改 `compute_bridge.py`、`remote_nodes.py`、
-`windows_worker.py` 三处。
+开发源码位于`windows_worker_support.py`、`windows_worker_core.py`和`windows_worker.py`；
+构建器合成为独立`prompt_hub_worker.py`，不是直接复制其中一个模块。发行执行器仅使用标准库，
+不依赖安装prompt_hub或numpy/Pillow/FastAPI。协议见`compute_bridge.py`的`compute_contract()`及`/api/compute/contract`。
+任务通过bridge的`outbox/inbox/processing/completed/failed`交换；双机bridge走SMB，单机是本地目录。
+改协议要同时核对Core投递/验收、Worker执行分层、生成器及回归测试；不能只改单文件副本。
 
 ## 必须守住的边界
 
-这些不是风格偏好，是产品定义的一部分，`README.md` 和 `completion_audit.md` 对用户做了承诺：
+这些不是风格偏好，是产品定义的一部分，当前边界以`README.md`和`docs/`现行指南为准：
 
 - **只读来源**：公共 Git 提示词库、用户的原始数据集目录、OC Manager 导出、Windows 的 `.safetensors`
   一律不得移动、改名、覆盖或写回。派生物（缩略图、报告、冻结版本）只写进 `library_root` 下的自有目录。
@@ -119,7 +120,7 @@ numpy/Pillow/FastAPI。它和 Mac 端之间唯一的契约是 `compute_bridge.py
   后才写入；确认时只填空白且未锁定的槽位/字段，不覆盖已有内容与人工判断。
 - **凭据不落盘、不回显**：外部模型 API Key 只写 `prompt-library/private/model-connections.json`（`0600`），
   接口和页面永不返回明文；不保存任何 Windows 登录凭据；投递给 Worker 的 payload 会拒绝含密码/token 的字段；
-  远程模型 Base URL 必须 HTTPS，只有 loopback 允许 HTTP。
+  公网模型Base URL要求HTTPS；loopback和允许的私有局域网地址支持HTTP，具体限制以端点校验实现为准，不能为排错关闭TLS校验。
 - **默认只听 127.0.0.1**。
 - **兼容边界**：`BASELINE.md` 列出的 API 路径、SQLite 表和 MCP 工具名不得无迁移地删除或改变返回语义。
   新功能新增自己的表和模块，不重定义 `entries` / `user_marks` / `oc_*` 的原始职责。
@@ -138,6 +139,6 @@ numpy/Pillow/FastAPI。它和 Mac 端之间唯一的契约是 `compute_bridge.py
 
 ## 进度类文档
 
-`task_plan.md`、`progress.md`、`findings.md` 是体量很大的历史开发记录（合计 300KB+），不要整份读入上下文；
-需要时用 grep 定位。面向当前状态的权威文档是 `completion_audit.md`、`FINAL_TEST_REPORT.md` 和
-`CHANGELOG.md`；`BASELINE.md` 记录不可破坏的兼容边界。
+当前用户入口是`README.md`和`docs/`；发布记录见`CHANGELOG.md`、Release tag及附件hash，
+原生验收按`docs/acceptance/manual-1.1.0-20260913.md`记录。`completion_audit.md`和`FINAL_TEST_REPORT.md`
+属于1.0历史证据，不证明当前版本通过。`BASELINE.md`保留历史兼容边界，本机`.planning/`不随公开发行。
