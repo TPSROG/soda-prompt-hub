@@ -179,7 +179,7 @@ def test_api_health_stats_search_and_page(source_tree, monkeypatch) -> None:
                 "datasetExportActiveProfile",
                 "datasetDeliveryHistory",
                 "复制到 ${escapeHtml(target)}",
-                "打开 Finder",
+                "打开所在文件夹",
                 "hashes.sha256",
                 "不修改源文件夹",
                 "不会启动 Windows 训练",

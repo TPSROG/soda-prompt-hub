@@ -1,5 +1,6 @@
 import html
 import json
+import sys
 
 from prompt_hub.comfy_web import COMFY_HTML, COMFY_SCRIPT, COMFY_STYLES
 from prompt_hub.creative_web import CREATIVE_HTML, CREATIVE_SCRIPT, CREATIVE_STYLES
@@ -49,7 +50,11 @@ INDEX_HTML = INDEX_HTML.replace(
 )
 
 
-def render_index_html(device_name: str) -> str:
+def render_index_html(device_name: str, *, usage_mode: str | None = None) -> str:
+    mode = usage_mode or ("windows_local" if sys.platform == "win32" else "mac_remote")
+    if mode not in {"windows_local", "mac_remote"}:
+        message = f"Unsupported usage mode: {mode}"
+        raise ValueError(message)
     safe_name = device_name.strip() or "Windows 绘图设备"
     script_name = (
         json.dumps(safe_name, ensure_ascii=False)
@@ -57,10 +62,25 @@ def render_index_html(device_name: str) -> str:
         .replace(">", r"\u003e")
         .replace("&", r"\u0026")
     )
-    return INDEX_HTML.replace(
+    markup = INDEX_HTML.replace(
         "__PROMPT_HUB_DEVICE_NAME_HTML__",
         html.escape(safe_name),
     ).replace(
         "__PROMPT_HUB_DEVICE_NAME_JSON__",
         script_name,
+    )
+    return (
+        markup.replace("__PROMPT_HUB_USAGE_MODE__", mode)
+        .replace(
+            "__PROMPT_HUB_DATASET_PATH__",
+            "D:/Pictures/my-dataset"
+            if mode == "windows_local"
+            else "/Users/your-name/Pictures/my-dataset",
+        )
+        .replace(
+            "__PROMPT_HUB_MODEL_PATH__",
+            "D:/Models/vision_model.onnx"
+            if mode == "windows_local"
+            else "/Users/you/models/vision_model.onnx",
+        )
     )

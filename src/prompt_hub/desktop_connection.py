@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 
 
 def connection_summary(store: RemoteNodeStore, node_id: str | None = None) -> dict[str, Any]:  # noqa: PLR0911, C901
+    local = sys.platform == "win32"
     nodes = [node for node in store.list_nodes() if node.get("role") == "compute_5060ti"]
     if node_id is not None:
         nodes = [node for node in nodes if node.get("node_id") == node_id]
@@ -30,16 +31,18 @@ def connection_summary(store: RemoteNodeStore, node_id: str | None = None) -> di
     node = node or next(iter(enabled), None) or next(iter(nodes), None)
     result: dict[str, Any] = {
         "state": "not_configured",
-        "label": "未配置计算设备",
-        "detail": "本机资料库可以独立使用，需要计算时再添加设备。",
+        "label": "本机服务尚未配置" if local else "未配置计算设备",
+        "detail": "请在 Windows 启动器启动本机服务，无需配对其他设备。"
+        if local
+        else "本机资料库可以独立使用，需要计算时再添加设备。",
         "device": str((node or {}).get("label", "计算设备")),
         "share_connected": False,
         "worker_online": False,
         "can_compute": False,
         "checked_at": datetime.now(UTC).isoformat(),
         "heartbeat_age_seconds": None,
-        "mode": "windows_local" if sys.platform == "win32" else "mac_remote",
-        "reconnect_url": reconnect_url(node or {}),
+        "mode": "windows_local" if local else "mac_remote",
+        "reconnect_url": "" if local else reconnect_url(node or {}),
     }
     if not node:
         return result
@@ -48,7 +51,9 @@ def connection_summary(store: RemoteNodeStore, node_id: str | None = None) -> di
             **result,
             "state": "disabled",
             "label": "设备未启用",
-            "detail": "在设备设置中启用这台设备后再检查。",
+            "detail": "请在 Windows 启动器启动本机服务后再检查。"
+            if local
+            else "在设备设置中启用这台设备后再检查。",
         }
     diagnostic = store.diagnostics(node["node_id"])
     messages = {
@@ -57,6 +62,22 @@ def connection_summary(store: RemoteNodeStore, node_id: str | None = None) -> di
         "mount_ready_bridge_unprepared": ("共享已连接 · 尚未准备", "在设备设置中准备任务目录。"),
         "bridge_read_only": ("共享已连接 · 无写入权限", "请检查共享目录的写入权限。"),
     }
+    if local:
+        messages = {
+            "not_configured": ("本机配置未完成", "请重新打开 Windows 启动器，完成本机服务初始化。"),
+            "mount_missing": (
+                "本机任务目录不可用",
+                "请检查启动器中的服务状态及本机任务目录是否存在。",
+            ),
+            "mount_ready_bridge_unprepared": (
+                "本机任务目录待准备",
+                "请在 Windows 启动器启动本机服务，自动准备任务目录。",
+            ),
+            "bridge_read_only": (
+                "本机任务目录不可写",
+                "请核对启动器使用的本机任务目录，确认当前账号有写入权限。",
+            ),
+        }
     result["share_connected"] = diagnostic["mount_exists"]
     state = diagnostic["state"]
     if state in messages:
@@ -66,8 +87,10 @@ def connection_summary(store: RemoteNodeStore, node_id: str | None = None) -> di
         return {
             **result,
             "state": "unconfirmed",
-            "label": "共享已连接 · Worker 待确认",
-            "detail": "未收到实时心跳，请启动支持连接状态的新版 Worker。",
+            "label": "本机 Worker 待确认" if local else "共享已连接 · Worker 待确认",
+            "detail": "尚未收到本机 Worker 心跳，请检查 Windows 启动器中的本机服务。"
+            if local
+            else "未收到实时心跳，请启动支持连接状态的新版 Worker。",
         }
     try:
         checked = datetime.fromisoformat(str(heartbeat.get("checked_at", "")))
@@ -80,14 +103,18 @@ def connection_summary(store: RemoteNodeStore, node_id: str | None = None) -> di
             **result,
             "state": "stale",
             "label": "Worker 连接中断",
-            "detail": "心跳已过期，请检查 Windows 是否休眠、Worker 是否仍在运行。",
+            "detail": "本机 Worker 心跳已过期，请检查启动器中的本机服务；电脑刚唤醒时可稍后刷新。"
+            if local
+            else "心跳已过期，请检查 Windows 是否休眠、Worker 是否仍在运行。",
         }
     if heartbeat.get("running") is not True:
         return {
             **result,
             "state": "stopped",
             "label": "Worker 已停止",
-            "detail": "共享目录仍可访问，在 Windows 启动 Worker 即可恢复。",
+            "detail": "请在 Windows 启动器中启动本机服务，无需另开独立 Worker。"
+            if local
+            else "共享目录仍可访问，在 Windows 启动 Worker 即可恢复。",
         }
     if (
         heartbeat.get("role") != node.get("role")
@@ -111,7 +138,9 @@ def connection_summary(store: RemoteNodeStore, node_id: str | None = None) -> di
         **result,
         "state": "connected",
         "label": "已连接 · 可以计算",
-        "detail": "共享目录、Worker 心跳和 ComfyUI 均正常。",
+        "detail": "本机 Worker 与 ComfyUI 均正常，无需跨设备连接。"
+        if local
+        else "共享目录、Worker 心跳和 ComfyUI 均正常。",
         "can_compute": True,
     }
 

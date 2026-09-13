@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import codecs
 import hashlib
+import json
 import re
 import zipfile
 from importlib.machinery import PathFinder
@@ -117,6 +119,21 @@ def test_windows_desktop_source_stage_is_complete_and_private_free(tmp_path: Pat
         assert f"{root}scripts/package_windows_desktop_release.py" in names
         assert not any(name.endswith("worker-config.json") for name in names)
         assert {item.date_time for item in bundle.infolist()} == {ZIP_TIMESTAMP}
+
+
+def test_staged_powershell_scripts_have_explicit_utf8_and_matching_hashes(tmp_path: Path) -> None:
+    result = stage_source(_repository(), tmp_path)
+    root = f"Soda-Prompt-Hub-Desktop-Source-{__version__}/"
+    with zipfile.ZipFile(str(result["archive"])) as bundle:
+        manifest = json.loads(bundle.read(f"{root}SOURCE_MANIFEST.json"))
+        scripts = [entry for entry in manifest["files"] if entry["path"].endswith(".ps1")]
+        assert scripts
+        for entry in scripts:
+            content = bundle.read(f"{root}{entry['path']}")
+            assert content.startswith(codecs.BOM_UTF8), entry["path"]
+            original = (_repository() / entry["path"]).read_text(encoding="utf-8-sig")
+            assert content.decode("utf-8-sig") == original
+            assert hashlib.sha256(content).hexdigest() == entry["sha256"]
 
 
 def test_windows_desktop_release_has_three_manifests_and_no_private_data(

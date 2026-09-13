@@ -54,7 +54,7 @@ COMFY_STYLES = r"""
 COMFY_HTML = r"""
 <section class="comfy-page" id="comfyPage" hidden>
   <section class="comfy-hero">
-    <div class="comfy-hero-copy"><span class="eyebrow">从 <span data-remote-device-name>__PROMPT_HUB_DEVICE_NAME_HTML__</span> 带回 Mac</span><h1>Windows<br>出图结果</h1><p>在这里导入 ComfyUI 生成的图片，并读取图片中实际保存的工作流和生成参数。没有参数的图片也能保存，但系统不会猜测或补写。</p></div>
+    <div class="comfy-hero-copy"><span class="eyebrow">从 <span data-remote-device-name>__PROMPT_HUB_DEVICE_NAME_HTML__</span> 导入资料库</span><h1>Windows<br>出图结果</h1><p>在这里导入 ComfyUI 生成的图片，并读取图片中实际保存的工作流和生成参数。没有参数的图片也能保存，但系统不会猜测或补写。</p></div>
     <aside class="comfy-flow"><span class="section-label">处理顺序</span><ol><li>选择一张图片，或扫描已经挂载的结果目录</li><li>核对模型、LoRA、提示词和生成参数</li><li>选择这张图属于哪个创作项目</li><li>决定作为参考、数据集候选、失败记录或下一版起点</li></ol></aside>
   </section>
   <section class="comfy-controls">
@@ -63,7 +63,7 @@ COMFY_HTML = r"""
     <div class="comfy-panel"><h2>2. 选择它属于哪个项目</h2><label>创作项目<select id="comfyProject"><option value="">请选择项目</option></select></label><p>除了“记录为失败测试”，其他处理方式都需要先选择项目。</p><button class="comfy-button secondary" id="comfyRefresh" type="button">刷新结果列表</button></div>
   </section>
   <div class="comfy-status" id="comfyStatus">先导入图片，或扫描 Windows 的结果文件夹。</div>
-  <div class="comfy-head"><div><span class="section-label">已经导入到 Mac 的图片</span><h2>等待您处理</h2></div><label>只看<select id="comfyFilter"><option value="">全部</option><option value="unreviewed">未审核</option><option value="candidate">数据集候选</option><option value="failed_test">失败测试</option><option value="reference">已关联参考</option></select></label></div>
+  <div class="comfy-head"><div><span class="section-label">已经导入到资料库的图片</span><h2>等待您处理</h2></div><label>只看<select id="comfyFilter"><option value="">全部</option><option value="unreviewed">未审核</option><option value="candidate">数据集候选</option><option value="failed_test">失败测试</option><option value="reference">已关联参考</option></select></label></div>
   <div class="comfy-grid" id="comfyGrid"></div>
 </section>
 """

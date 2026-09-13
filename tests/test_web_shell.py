@@ -85,7 +85,7 @@ def test_interface_translations_do_not_embed_personal_runtime_values() -> None:
     assert "CHINAMI-5E1E3GQ" not in INDEX_HTML
     assert "linhuieroc" not in INDEX_HTML
     assert re.search(r"project-[0-9a-f]{24,}", INDEX_HTML) is None
-    assert "Mac project directory: ${match[1]}" in INDEX_HTML
+    assert "Local project directory: ${match[1]}" in INDEX_HTML
     assert "Device / ${match[2]}" in INDEX_HTML
     assert "Associated: ${match[1]}" in INDEX_HTML
 
