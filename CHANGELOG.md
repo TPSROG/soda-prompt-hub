@@ -5,6 +5,16 @@
 
 ## [未发布]
 
+暂无新的功能发行条目。下列桌面功能已包含在2026-09-13验收构建中。
+
+## [1.1.0 桌面验收构建] - 2026-09-13
+
+- [Mac + Windows Worker](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-mac-windows-20260913)
+- [Windows 单机版](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-windows-standalone-20260913)
+
+两套对应源码 `5f5e885`，软件版本仍为1.1.0，GitHub状态为Pre-release；未正式平台签名，完整新包原生手验待完成。
+自动化测试及构建校验不等于完整人工验收，操作清单见[手动验收](docs/acceptance/manual-1.1.0-20260913.md)。
+
 ### 新增
 
 - 提供 Mac 自包含 DMG、Windows Desktop 安装器和 Windows Compute Worker 安装器；支持
@@ -22,6 +32,9 @@
 
 ### 修复
 
+- Windows 单机首屏不再闪现 Mac 配对界面；路径、错误提示与交付入口按模式适配，单机不显示跨设备复制。
+- 修复窄屏模型服务工具栏按钮被挤成竖排的问题。
+- Windows 源码打包时在生成哈希清单前规范化 PowerShell 脚本为 UTF-8 BOM，兼容 PowerShell 5.1 中文环境。
 - Windows 安装包内置私有 Git；资料更新显示实际任务进度，个人数据备份不再依赖 Mac 专用 Git 路径。
 - Windows embedded Python 优先加载包内 Core；修复单机启动等待、模型连接表单隐藏及启动器文字对比度问题。
 - 结果目录扫描、模型清单和标签翻译增加阶段反馈；CLIP 发现阶段支持进度与协作式取消，保留已完成批次。

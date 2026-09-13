@@ -4,28 +4,43 @@ Soda Prompt Hub 是一套本机优先的 AI 绘图创作与数据集整理工具
 保存提示词、视觉参照、OC、创作项目、结果图、Caption、审核记录和冻结版本；Windows Worker 可以把
 经过确认的任务交给本机 ComfyUI，也可以与另一台设备配合。LoRA 正式训练仍在 Windows 的训练工具中完成。
 
-当前源码版本为 `1.1.0`，属于稳定版通道。升级说明和版本规则见[正式版本体系](docs/RELEASES.md)。
+软件版本保持 `1.1.0`。2026-09-13 桌面构建已发布为 **Pre-release（待手动验收）**，
+未正式平台签名；软件里显示的 stable 不代表这批安装包已经完成原生人工验收。
+版本与构建标识的区别见[正式版本体系](docs/RELEASES.md)。
+
+## 下载：先选使用方式
+
+| 使用方式 | 下载 | 要运行的应用 |
+| --- | --- | --- |
+| Mac 管理 Windows | [Mac 启动器 + Windows Worker](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-mac-windows-20260913) | Mac 安装 DMG；Windows 安装并打开 Soda Compute Worker |
+| Windows 单机 | [Windows Desktop](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-windows-standalone-20260913) | 只安装并打开 Soda Prompt Hub，自动管理本机 Core / Worker |
+
+Mac 包面向 Apple Silicon（arm64），Windows 包面向 x64。下载 Release 的 Assets 中的 DMG / Setup，
+不是 GitHub 自动生成的 Source code ZIP。每套附有 `SHA256SUMS` 和手动验收说明。
+Windows 单机**不需要另开独立 Worker，也不需要 SMB 配对**。两套请分开测试，避免同时运行时混淆任务。
 
 ## 五分钟开始
 
-1. Mac 用户下载 DMG，把 `Soda Prompt Hub.app` 拖入 Applications；Windows 用户运行 Desktop Setup。
-2. 双击系统应用列表中的 `Soda Prompt Hub`，不需要预装 Python 或 `uv`。
-3. 启动台显示 Core 已就绪后，打开本机工作台。
-4. 首页提示缺少资料库时，确认来源和许可证后再安装。
-5. 需要 ComfyUI 自动执行时，再在 Windows 安装独立的 `Soda Compute Worker`。
+1. 按上表下载，核对校验和，备份已有资料并正常退出旧服务，再安装对应应用。
+2. Windows 单机：启动 ComfyUI，再打开 Soda Prompt Hub，在启动器设置填写本机 ComfyUI 地址。
+3. Mac 管理 Windows：Windows 打开 ComfyUI 和独立 Soda Compute Worker；Mac 打开应用，按“设备连接”的配对引导完成共享授权。
+4. 启动台显示 Core 已就绪后打开工作台，确认实时 Worker / ComfyUI 状态。最终用户无需预装 Python、`uv`、Git 或 `.NET SDK`。
+5. 按需安装资料库和可选模型；外部 AI 服务的 URL、Key 与模型在“设备连接 → 模型服务”配置。
+
+完整安装步骤见[快速开始](docs/QUICK_START.md)，新包测试见[手动验收](docs/acceptance/manual-1.1.0-20260913.md)。
 
 程序默认只监听本机 `127.0.0.1`。新用户的个人资料默认保存在：
 
-```text
-$HOME/Documents/Soda Prompt Hub/prompt-library
-```
+| 管理端 | 个人资料目录 |
+| --- | --- |
+| Mac | `~/Documents/Soda Prompt Hub/prompt-library` |
+| Windows 单机 | `%USERPROFILE%\Documents\Soda Prompt Hub\prompt-library` |
 
 程序和个人资料彼此独立。重新安装或更新程序不会主动移动、删除提示词、图片、数据库或模型。
 
-便携启动器不会显示 Terminal。它会先显示品牌启动台，用真实步骤检查并启动 Core；就绪后打开工作台，
-随后收进菜单栏。菜单栏可以重新打开启动台、工作台、日志和数据目录。关闭启动台窗口不会停止 Core；
-需要维护或排错时，仍可使用程序目录里的 `.command` 工具。日志保存在
-`$HOME/Library/Logs/Soda Prompt Hub`。
+启动器不显示 Terminal。关闭窗口或“收起窗口”不会停止服务；Mac 用“退出并停止服务”，
+Windows 单机用“退出并停止本机服务”。只退出启动器可以保留服务。
+日志、数据目录和故障处理入口见[安装说明](docs/COMMERCIAL_RELEASE.md)与[排错](docs/TROUBLESHOOTING.md)。
 
 ## 它能做什么
 
@@ -34,11 +49,14 @@ $HOME/Documents/Soda Prompt Hub/prompt-library
 - 使用 AnimaDex 的角色、画师和作品缩略图作视觉参照；完整目录仍由用户使用自己的导出 token 下载到本机。
 - 使用 LM Studio 或可选的 OpenAI-compatible 模型辅助整理；模型结果先作为建议或草稿。
 - 使用 WD14 生成 Anima 标签草稿，人工审核后冻结为带哈希的版本化数据集。
-- 通过 SMB + Windows Worker 运行 ComfyUI、回收图片，并同步 LoRA/底模名称、分类、来源和预览图。
+- 通过 Windows 本机 Worker 运行 ComfyUI、回收图片，并同步 LoRA/底模只读清单；Mac 双机模式使用 SMB 交换任务。
 - 使用 `Soda Compute Worker.exe` 在 Windows 图形界面查看 GPU、bridge、ComfyUI 和当前任务，并从系统托盘启停 Worker。
-- 在 Mac 管理 Workflow Profile、底模、LoRA、尺寸、Steps、CFG、Sampler 和 Scheduler 的选择。
+- 在工作台管理 Workflow Profile、底模、LoRA、尺寸、Steps、CFG、Sampler 和 Scheduler 的选择。
 
-## Mac 与 Windows 的分工
+## 两种方式，数据分别保存在管理端
+
+Windows 单机的项目、审核和结果保存在 Windows；Core 和 Worker 使用本地任务目录交换记录，不需要共享。
+Mac 管理 Windows 时，项目、审核和结果保存在 Mac，通信过程如下：
 
 ```text
 Mac Prompt Hub（事实、审核、版本）
@@ -70,7 +88,7 @@ macOS 钥匙串保存，Prompt Hub 不读取密码。更完整的文件关系见
 | 页面打不开、共享盘断开或任务不动 | [常见问题与排错](docs/TROUBLESHOOTING.md) |
 | 版本号、更新通道和发布检查 | [正式版本体系](docs/RELEASES.md) |
 | 查看长期开发边界和历史路线 | [开发计划](DEVELOPMENT_PLAN.md) |
-| 按情景进行人工验收 | [人工验收清单](MANUAL_ACCEPTANCE_GUIDE.md) |
+| 安装新包后手动验收两种模式 | [当前验收清单](docs/acceptance/manual-1.1.0-20260913.md) |
 
 ## 当前边界
 

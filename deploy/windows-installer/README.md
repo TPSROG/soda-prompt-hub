@@ -6,6 +6,10 @@ WebView2 bootstrapper 签名。
 
 ## 构建要求
 
+普通用户无需执行本节。当前下载按[Mac+Worker](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-mac-windows-20260913)
+与[Windows单机](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-windows-standalone-20260913)分组，
+每套附独立SHA256SUMS和手动验收说明。2026-09-13构建仍为1.1.0 Pre-release，不代表生命周期手验全通过。
+
 - Windows 10/11 x64 构建机
 - PowerShell 5.1 或更高版本
 - `.NET 8 SDK`、Python 3.12、`uv`
@@ -21,6 +25,11 @@ WebView2 bootstrapper 签名。
 
 如果 `uv.exe` 或 `ISCC.exe` 是 per-user 安装且尚未进入当前 PowerShell 的 PATH，可分别通过
 `-UvExecutable` 与 `-InnoCompiler` 传入绝对路径。
+
+也可在Mac的.NET 8 SDK容器交叉编译两个win-x64 self-contained宿主，再传到Windows执行Inno安装器构建；
+这是2026-09-13所用流程，不要求在最终用户电脑安装SDK。它不能替代Windows实机安装/运行验收。
+跨设备源码暂存使用 `scripts/stage_windows_desktop_source.py`：在生成manifest之前将`.ps1`规范化为UTF-8 BOM，
+避免PowerShell 5.1按ANSI解码中文。传输与解压后核对manifest，不在记录哈希之后手改编码。
 
 构建脚本会执行以下操作：
 

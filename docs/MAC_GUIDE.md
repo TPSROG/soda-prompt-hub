@@ -1,119 +1,103 @@
 # Mac 使用与维护
 
-Mac 是事实源：项目、审核、Caption、任务记录和冻结版本都以 Mac 保存的内容为准。
+本指南适用于 Mac 管理 Windows：项目、审核、Caption 和版本记录保存在 Mac。
+Windows 单机的数据则保存在 Windows，见[快速开始](QUICK_START.md)。
 
 ## 启动、停止与诊断
 
-安装后的日常入口位于：
+从[Mac + Windows Worker Release](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-mac-windows-20260913)
+下载 DMG，核对 SHA-256，将应用拖入 Applications。默认应用位置是：
 
 ```text
-$HOME/Applications/Soda Prompt Hub
+/Applications/Soda Prompt Hub.app
 ```
 
-- `Soda Prompt Hub.app`：推荐的日常入口；双击后显示启动状态，在后台启动服务并打开页面，不显示 Terminal。
-- `启动-Prompt-Hub.command`：启动本地服务并打开 `127.0.0.1:8765`。
-- `停止-Prompt-Hub.command`：检查后台任务后安全停止。
-- `诊断-Prompt-Hub.command`：检查程序、数据库、视觉索引、WD14、磁盘和服务。
-- `更新-Soda-Prompt-Hub.command`：从新下载的完整源码包执行安全更新。
+这是自包含应用，内置 Python 和依赖，不需要预装 Python，不要求首次运行安装脚本或准备外部 `.venv`。
+个人资料默认在 `~/Documents/Soda Prompt Hub/prompt-library`；已有安装可能沿用旧资料目录，
+以启动器“打开数据目录”显示的位置为准。日志入口指向 `~/Library/Logs/Soda Prompt Hub`。
 
-有扫描、打标或草稿任务运行时，停止脚本会先提示。优先在页面取消或等待完成，再关闭服务。
+- 双击应用：检查 Core、显示启动状态并提供工作台入口。
+- 关闭窗口或“收起窗口”：隐藏启动台，Core 继续运行。
+- “退出启动器”：退出应用界面，保留 Core。
+- “退出并停止服务”：启动台窗口和屏幕顶部菜单栏应用图标中均有入口；不是 Dock 右键菜单。
+- 启动失败：窗口显示错误，先看日志，再重试；不要连续开多个实例。
 
-`.app` 启动器可以复制到桌面或 Applications。实际程序仍应由首次安装器放在
-`$HOME/Applications/Soda Prompt Hub`，避免 macOS 对 Documents 等目录的后台访问限制。启动器会优先
-使用构建时指定的程序目录，找不到时再检查默认安装目录。如果启动失败，服务日志位于
-`$HOME/Library/Logs/Soda Prompt Hub/server.log`。
+停服前先在 WebUI 等待或取消扫描、打标、草稿等任务。停服按钮仅在已确认目标进程身份时可用：
+校验同一用户、Core 命令、端口和启动时间后，才请求正常退出；可以识别并接管已有的匹配 Core。
+身份变化或退出超时会报错，不按端口强杀无关程序。“重启 Core”仍限于当前启动器启动的进程。
+停止 Mac Core 不会停止 Windows 独立 Worker。
 
-服务就绪后，启动台保留设备连接卡片，方便确认状态；可以手动收起。关闭窗口只隐藏启动台，不会停止 Core。
-菜单栏的应用图标旁会显示“在线”“断开”“本机”等状态，入口提供：
+## 连接 Windows
 
-- 打开启动台或工作台。
-- 打开日志和数据目录。
-- 重新检查设备连接，或从连接卡片进入设备设置。
-- 退出启动器但保留当前服务。
-- 当服务确实由当前启动器托管时，退出并停止服务。
+Windows 开启 ComfyUI 和独立 Soda Compute Worker。Mac WebUI“设备连接”按配对引导保存主机与共享名称，
+在系统窗口完成 SMB 授权；密码由 macOS 钥匙串保存，不填写进 Prompt Hub。
 
-启动失败时窗口会停留在错误状态，可以直接查看日志并重试。为了避免误杀其他进程，启动器不会重启或
-停止一个并非由当前 App 启动的 Core。
+启动器每5秒检查连接。“共享已连接”只证明任务目录可访问；“已连接 · 可以计算”还要求 Worker
+持续心跳和 ComfyUI 可用。心跳超过25秒会显示中断，历史自检不能证明当前在线。
+连接恢复/断开有状态反馈；未配对或 Windows 离线不影响 Mac 已保存资料的整理。
+具体 Worker 配置见[Windows Worker 指南](WINDOWS_WORKER.md)。
 
-设备连接每 5 秒自动检查一次。“共享已连接”仅代表能访问任务目录；“已连接 · 可以计算”还要求新版 Worker
-持续发送心跳且 ComfyUI 可访问。心跳超过 25 秒未更新会显示连接中断，旧 Worker 的历史自检不算在线证据。
-断开或恢复时启动台会显示一次提示，状态不变时不会重复弹窗。未配置设备时显示本机模式，不影响资料管理。
+## 安全更新顺序
 
-维护者可以从源码根目录重新构建启动器：
+1. 备份个人资料，确认没有正在写入的任务；外部原图单独备份。
+2. 下载目标构建的 DMG，核对日期、tag 和 SHA-256。界面同为1.1.0不代表是同一构建。
+3. 从当前启动器选择“退出并停止服务”；失败时先处理日志中的原因。
+4. 用 DMG 中的新 App 覆盖 Applications 中的旧 App，不拖动个人资料目录。
+5. 从 Applications 打开新版，核对项目、配置与结果，再按[手动验收](acceptance/manual-1.1.0-20260913.md)检查。
+
+DMG 覆盖安装不会自动执行旧源码更新器的备份/失败回滚流程，应事先主动备份。
+完成备份与停服后，覆盖旧 `.app` 即可升级；删除 `.app` 只卸载程序，不主动删除个人资料。
+当前包尚未 Developer ID 签名，也没有Apple公证。
+2026-09-13包是未正式平台签名、待手动验收的Pre-release；不要因软件显示stable就跳过验收。
+安全提示或“已损坏”见[排错](TROUBLESHOOTING.md)，不要关闭 Gatekeeper。
+
+## 备份与恢复
+
+普通用户优先使用 WebUI 的个人数据备份入口。维护人员也可在配置相同资料目录的源码环境运行：
+
+```bash
+uv run --no-sync prompt-hub backup
+uv run --no-sync prompt-hub verify-backup /绝对路径/备份目录
+uv run --no-sync prompt-hub restore /绝对路径/备份目录 \
+  --destination "$HOME/Documents/Soda Prompt Hub/restore-tests/prompt-hub-YYYYMMDD"
+```
+
+恢复目标必须不存在或为空；核对后再决定是否切换正式资料位置。不要覆盖正在使用的资料库。
+外部数据集原图、公共资料来源和大模型不等于已经包含在个人数据备份中，应按需要另行保存。
+
+## 维护附录：旧源码安装与轻量启动器
+
+以下仅适用于维护人员和已有源码安装，不是 DMG 用户的必做步骤。
+
+- 旧源码默认安装目录为 `$HOME/Applications/Soda Prompt Hub`，不要与 `/Applications/Soda Prompt Hub.app` 混淆。
+- `deploy/mac` 的启动、停止、诊断和更新 `.command` 用于该源码安装。
+- 更新源码安装时，完整解压新源码包，在新包的 `deploy/mac` 运行 `更新-Soda-Prompt-Hub.command`。
+  更新器先停服、备份资料与旧程序，再准备依赖和初始化；失败时尝试恢复旧程序。
+- 该更新器的旧程序快照默认在 `~/Library/Application Support/Soda Prompt Hub/program-backups`；
+  不要把这项保障推及普通 DMG 覆盖安装。
+
+轻量启动器构建：
 
 ```bash
 uv run --no-sync python scripts/build_mac_portable_launcher.py \
   --runtime-root-hint "$HOME/Applications/Soda Prompt Hub"
 ```
 
-默认产物为 `dist/Soda Prompt Hub.app`。这是轻量启动器，不内置 Python 和模型；首次使用仍需运行首次
-安装器准备运行环境。直接让后台 App 从 Documents 内的开发仓库运行，可能受到 macOS 隐私权限限制。
-
-面向普通用户分发时，维护者应改用无签名商业构建器：
+它依赖外部源码运行环境。面向普通用户的自包含构建改用：
 
 ```bash
 .venv/bin/python scripts/build_mac_commercial_release.py
 ```
 
-它生成架构对应的自包含 `.app`、带 Applications 快捷入口的标准 DMG、包内 SHA-256 manifest 和
-`COMMERCIAL_RELEASE.json`。最终用户不需要预装 Python 或 `uv`；覆盖旧 `.app` 即可升级，删除 `.app`
-即可卸载，`~/Documents/Soda Prompt Hub` 中的个人资料不会随程序删除。当前产物尚未 Developer ID 签名或
-notarize，首次打开会看到 macOS 的未知开发者提醒。
+构建后验证 App 的 manifest、ad-hoc 签名和 DMG 哈希；ad-hoc 不等于 Developer ID 签名或公证。
+签名后必须重新验收，不复用原哈希。
 
-## 安全更新顺序
-
-1. 从 GitHub Release 下载并完整解压新版源码 ZIP。
-2. 不要在已安装目录里覆盖文件。
-3. 在新版解压目录的 `deploy/mac` 双击 `更新-Soda-Prompt-Hub.command`。
-4. 更新器核对 `pyproject.toml` 与 `RELEASE.json` 的版本一致性。
-5. 更新器先停止旧服务，再建立个人资料备份和旧程序快照。
-6. 新版在临时目录准备依赖；初始化成功后才正式启用。
-7. 新版初始化失败时，更新器会保存失败副本并恢复旧程序。
-
-更新只替换程序。提示词 Git 来源、模型、个人数据库、图片和外部数据集不会随代码包更新。
-
-默认个人资料备份位置：
-
-```text
-$HOME/Documents/Soda Prompt Hub/backups/prompt-hub
-```
-
-默认旧程序快照位置：
-
-```text
-$HOME/Library/Application Support/Soda Prompt Hub/program-backups
-```
-
-## 备份与恢复
-
-开发者或维护人员可以在安装目录运行：
-
-```bash
-uv run --no-sync prompt-hub backup
-uv run --no-sync prompt-hub verify-backup /绝对路径/备份目录
-```
-
-恢复必须先写入一个不存在或为空的新目录：
-
-```bash
-uv run --no-sync prompt-hub restore /绝对路径/备份目录 \
-  --destination "$HOME/Documents/Soda Prompt Hub/restore-tests/prompt-hub-YYYYMMDD"
-```
-
-核对新目录正确后，再单独决定是否切换正式资料位置。程序不提供覆盖当前资料库的一键恢复。
-
-外部导入的数据集原图仍在原文件夹，需要使用移动硬盘、NAS 或其他方式另行备份。
-
-## 自定义位置
+## 自定义位置与监听
 
 - `PROMPT_HUB_LIBRARY_ROOT`：个人资料目录。
 - `PROMPT_HUB_MODELS_ROOT`：本地模型目录。
-- `PROMPT_HUB_INSTALL_ROOT`：首次安装和更新时的程序目录。
-- `PROMPT_HUB_PORT`：本地页面端口，默认 `8765`。
+- `PROMPT_HUB_INSTALL_ROOT`：旧源码安装/更新目录，不是 DMG App 的移动开关。
+- `PROMPT_HUB_PORT`：页面端口，默认8765。
 
-普通用户不需要设置这些变量。自定义后应让启动、停止、诊断和更新使用同一组设置。
-
-## 手机访问
-
-默认 `127.0.0.1` 仅限 Mac 本机，最安全。若主动使用局域网模式，确保 Wi-Fi 是可信网络，并在
-使用后恢复本机监听。手机只是在浏览 Mac 上的页面；数据仍保存在 Mac，Windows 连接方式不变。
+普通用户无需设置这些变量。维护启动、备份、恢复时必须确认使用同一资料位置。
+默认 `127.0.0.1` 仅供本机访问；局域网监听属于高级配置，不是 Mac→Windows 配对的必要步骤。

@@ -6,7 +6,10 @@
 最短流程：
 
 ```text
-灵感或 OC → 七槽位 → Anima/Krea 2 Prompt → Windows ComfyUI → Mac 复盘 → 人工审核数据集 → 冻结交付
+灵感或 OC → 七槽位 → Anima/Krea 2 Prompt → Windows ComfyUI → 管理端复盘 → 人工审核数据集 → 冻结交付
 ```
 
 第一次使用请先看[快速开始](docs/QUICK_START.md)。
+
+管理端在Windows单机模式是本机，在Mac→Windows模式是Mac。单机由一个启动器管理Core/Worker，不另开独立Worker；
+交付使用本地文件夹或ZIP，双机才另有跨设备复制。

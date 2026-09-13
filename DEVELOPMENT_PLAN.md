@@ -1,12 +1,14 @@
 # Soda Prompt Hub 开发计划
 
-> 当前状态：绘图与数据集主线以及 P0/P1 公开安装、Windows Worker 发行和版本体系已经形成
-> `1.1.0rc1` 候选版；当前进入 P2 深度代码拆分。本文件保留产品结构和实施路线；实时完成度
-> 以 `completion_audit.md`、`FINAL_TEST_REPORT.md` 和 `task_plan.md` 顶部状态为准。
+> 状态更新（2026-09-13）：软件保持1.1.0，P2分层和桌面启动器已落地，两套桌面Pre-release已发布；
+> 完整新包原生手验仍待完成，平台签名延后。发布事实见[CHANGELOG](CHANGELOG.md)和[版本体系](docs/RELEASES.md)，
+> 当前操作见[快速开始](docs/QUICK_START.md)。本文件主体保留阶段路线，不代表全部阶段已经验收通过；
+> `completion_audit.md`、`FINAL_TEST_REPORT.md` 是1.0历史记录，不能作为当前证明。
 
 ## 1. 产品定位
 
-Soda Prompt Hub 是运行在 Mac 上的本地 AI 绘图创作与知识中枢。它不替代 Windows 上的 ComfyUI，也不直接取代 OC Manager，而是把三类资料组织成可使用的创作结果：
+Soda Prompt Hub 是运行在Mac或Windows上的本地AI绘图创作与知识中枢。当前支持Mac管理Windows与Windows单机两种方式；
+下文旧路线中的“Mac事实源”只适用于双机模式。它不替代ComfyUI或OC Manager，而是把三类资料组织成创作结果：
 
 - OC Manager 中的角色、世界观和角色专属 Prompt；
 - 本地提示词库、标签库、画风库和视觉参考图；
@@ -366,7 +368,7 @@ P2 只改变代码所有权，不改变 API URL、SQLite schema、Windows 协议
 
 ### 10.1 工程安全门
 
-当前业务文件已明显集中，且工作树尚未建立受 Git 跟踪的正式基线。进入下一轮较大开发前先完成：
+以下是早期进入数据集主线前的工程安全门；当前已建立Git基线并完成主要分层。后续较大开发仍需检查：
 
 - 正式库、用户媒体和配置备份；
 - 在用户确认后建立 Git 基线与远程备份；
