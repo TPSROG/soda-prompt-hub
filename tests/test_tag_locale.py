@@ -71,6 +71,33 @@ def test_tag_locale_api(settings) -> None:
         assert invalid.status_code == 422
 
 
+def test_readonly_localization_never_calls_model(settings, monkeypatch) -> None:
+    calls = []
+
+    def translate(tag):
+        calls.append(tag)
+        return "模型翻译"
+
+    monkeypatch.setattr("prompt_hub.api.make_model_translator", lambda _: translate)
+    cache = TagLocaleCache(settings.database_path)
+    cache.initialize()
+    cache.set("cached_custom_tag", "已有缓存")
+    with TestClient(create_app(settings)) as client:
+        response = client.post(
+            "/api/tags/localize",
+            json={
+                "tags": ["silver_hair", "cached_custom_tag", "unknown_custom_tag"],
+                "allow_model": False,
+            },
+        )
+        assert response.status_code == 200
+        assert calls == []
+        assert [item["zh"] for item in response.json()["items"]] == ["银发", "已有缓存", ""]
+        response = client.post("/api/tags/localize", json={"tags": ["unknown_custom_tag"]})
+        assert response.status_code == 200
+        assert calls == ["unknown_custom_tag"]
+
+
 class _FakeConnection:
     def __init__(self, *, base_url: str, model_name: str, api_key: str = "") -> None:
         self.base_url = base_url

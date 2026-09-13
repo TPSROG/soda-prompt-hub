@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import io
+from threading import Event
 from typing import Any, cast
 
+import pytest
 from PIL import Image
 
+from prompt_hub.background_jobs import BackgroundJobStore, JobCancelledError, JobContext
 from prompt_hub.comfy_results import ComfyResultStore
 from prompt_hub.creative import CreativeStore
 from prompt_hub.database import PromptDatabase
@@ -14,6 +17,32 @@ from prompt_hub.importers import import_all
 from prompt_hub.result_media import store_result_image
 from prompt_hub.visual_assets import VisualAssetCatalog
 from prompt_hub.web_capture import FetchResult, WebCaptureService
+
+
+def test_discovery_cancels_inside_collector_before_next_file(settings, monkeypatch) -> None:
+    jobs = BackgroundJobStore(settings.database_path)
+    jobs.initialize()
+    job = jobs.enqueue("local_visual_index", {})
+    jobs.claim_next({"local_visual_index"})
+    context = JobContext(jobs, job["job_id"], Event())
+    unused = cast("Any", None)
+    catalog = VisualAssetCatalog(settings, unused, unused, unused, unused, unused, unused)
+    visited = []
+
+    def collect(progress):
+        visited.append("first")
+        jobs.request_cancel(job["job_id"])
+        progress("second.png")
+        visited.append("second")
+        yield None
+
+    monkeypatch.setattr(catalog, "_prompt_visuals", collect)
+    with pytest.raises(JobCancelledError):
+        catalog.discover({"prompt_visual"}, context=context)
+    assert visited == ["first"]
+    canceled = jobs.get(job["job_id"])
+    assert canceled is not None
+    assert canceled["cancel_requested"]
 
 
 class _Context:

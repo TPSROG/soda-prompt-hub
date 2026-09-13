@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from prompt_hub.local_model import DEFAULT_LM_STUDIO_URL
+from prompt_hub.pairing_web import PAIRING_HTML, PAIRING_SCRIPT, PAIRING_STYLES
 
 REMOTE_STYLES = r"""
 <style>
@@ -28,6 +29,15 @@ REMOTE_STYLES = r"""
   .remote-section-tab-count { min-width: 32px; border: 1px solid currentColor; padding: 6px 7px; font: 900 8px monospace; text-align: center; }
   .remote-section-tab[aria-selected="true"] .remote-section-tab-count { background: var(--acid); color: var(--ink); }
   .remote-section-panel[hidden] { display: none; }
+  .remote-tag-feedback { margin-top: 14px; padding: 16px 20px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); }
+  .remote-tag-feedback .remote-result-actions { justify-content: flex-start; flex-wrap: wrap; }
+  .remote-tag-feedback p { margin: 12px 0 0; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+  .remote-tag-feedback button { appearance: none; border: 1px solid var(--ink); padding: 10px 14px; background: var(--paper); color: var(--ink); font-family: inherit; font-weight: 700; font-size: 12px; cursor: pointer; }
+  .remote-tag-feedback button:hover { background: var(--ink); color: var(--paper); }
+  .remote-tag-feedback button:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
+  .remote-tag-feedback button:disabled { opacity: .65; cursor: wait; }
+  .remote-tag-feedback progress { display: block; width: min(100%,420px); height: 8px; margin-top: 12px; accent-color: var(--signal); }
+  .remote-tag-feedback progress[hidden] { display: none; }
   .remote-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 14px; }
   .remote-card { border: 1px solid var(--line); background: var(--paper); padding: 22px; box-shadow: var(--shadow); }
   .remote-card-head { display: flex; justify-content: space-between; gap: 16px; align-items: start; }
@@ -42,8 +52,27 @@ REMOTE_STYLES = r"""
   .remote-check { display: flex !important; align-items: center; grid-template-columns: auto 1fr; }
   .remote-check input { width: auto; }
   .remote-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+  .remote-form[hidden], .remote-actions[hidden], .remote-page aside[hidden] { display: none; }
+  .remote-page[data-usage-mode="windows_local"] .remote-hero { grid-template-columns: 1fr; }
   .remote-actions button { border: 1px solid var(--ink); background: transparent; padding: 9px 10px; font: 900 8px monospace; }
   .remote-actions button.primary { border-color: var(--signal); background: var(--signal); color: white; }
+  .remote-actions button { cursor: pointer; transition: background 160ms ease, transform 160ms ease; }
+  .remote-actions button:hover:not(:disabled) { background: var(--ink); color: var(--paper); }
+  .remote-actions button:active:not(:disabled) { transform: translateY(1px); }
+  .remote-actions button:disabled { cursor: wait; opacity: .55; }
+  .remote-actions button[aria-busy="true"] { opacity: 1; background: var(--ink); color: var(--paper); }
+  .remote-action-feedback { margin-top: 12px; padding: 12px 14px; border-left: 3px solid #4b6735; background: #e4e8d8; color: var(--ink); font-size: 11px; line-height: 1.65; }
+  .remote-action-feedback[data-tone="busy"] { border-color: var(--ink); background: var(--paper-deep); }
+  .remote-action-feedback[data-tone="error"], .remote-action-feedback[data-tone="warning"] { border-color: var(--signal); background: #efe0d6; }
+  .remote-action-feedback[hidden] { display: none; }
+  .remote-actions button[aria-busy="true"]::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: currentColor; }
+  @keyframes remote-pulse { 50% { opacity: .3; transform: scale(.7); } }
+  @keyframes remote-arrive { from { opacity: .25; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+  @media (prefers-reduced-motion: no-preference) {
+    .remote-actions button[aria-busy="true"]::before { animation: remote-pulse 1.2s ease-in-out infinite; }
+    .remote-action-feedback { animation: remote-arrive 220ms ease-out; }
+  }
+  @media (prefers-reduced-motion: reduce) { .remote-actions button { transition: none; } }
   .remote-message { min-height: 40px; margin-top: 12px; border-left: 4px solid var(--acid); background: #e2dccd; padding: 9px 11px; font: 8px/1.55 monospace; }
   .remote-worker-compatibility { margin-top: 8px; border-left: 4px solid var(--acid); background: #e7e0d2; padding: 8px 11px; color: var(--ink); font: 800 8px/1.55 monospace; }
   .remote-worker-compatibility.update_recommended, .remote-worker-compatibility.incompatible { border-left-color: var(--signal); }
@@ -193,7 +222,8 @@ REMOTE_STYLES = r"""
 
 REMOTE_HTML = rf"""
 <section class="remote-page" id="remotePage" hidden>
-  <section class="remote-hero"><div class="remote-copy"><span class="eyebrow">Mac 连接 <span data-remote-device-name>__PROMPT_HUB_DEVICE_NAME_HTML__</span></span><h1>设备<br>连接</h1><p>在这里查看 Windows 的运行状态、接收 ComfyUI 出图结果，以及更新 LoRA 和底模清单。数据集整理仍在 Mac 完成；筛标、正则和训练仍由你在 Windows 的 AnimaLoraStudio 中操作。</p></div><aside class="remote-boundary"><span class="section-label">登录信息放在哪里</span><strong>密码由 Mac 钥匙串保存</strong><p>先用 Finder 连接 Windows 共享文件夹，并选择记住密码。这里仅填写 Windows 地址和 Mac 上已经连接好的文件夹位置，不会保存账号密码。</p></aside></section>
+  <section class="model-installer-entry"><div><strong>本地模型 · 按需安装</strong><p>WD14 打标、真人打标和相似图检索。与 API 模型服务分开管理，不强制下载。</p></div><button type="button" data-open-optional-models="">管理可选模型 →</button></section>
+  <section class="remote-hero"><div class="remote-copy"><span class="eyebrow">Mac 连接 <span data-remote-device-name>__PROMPT_HUB_DEVICE_NAME_HTML__</span></span><h1>设备<br>连接</h1><p>在这里查看 Windows 的运行状态、接收 ComfyUI 出图结果，以及更新 LoRA 和底模清单。数据集整理仍在 Mac 完成；筛标、正则和训练仍由你在 Windows 的 AnimaLoraStudio 中操作。</p></div><aside class="remote-boundary"><span class="section-label">登录信息放在哪里</span><strong>密码由 Mac 钥匙串保存</strong><p>首次填写 Windows 地址与共享名称，保存后点击“连接 Windows”。请在系统窗口完成登录并选择记住密码；软件不会保存账号密码。已有挂载路径也可以继续使用。</p></aside></section>
   <nav class="remote-section-tabs" id="remoteSectionTabs" role="tablist" aria-label="设备连接子页面">
     <button class="remote-section-tab" id="remoteTasksTab" type="button" role="tab" aria-selected="true" aria-controls="remoteTasksPanel" data-remote-view="tasks"><span class="remote-section-tab-icon" aria-hidden="true">●</span><span class="remote-section-tab-copy"><small>01 / 任务</small><strong>任务状态</strong></span><span class="remote-section-tab-count" id="remoteTasksCount">—</span></button>
     <button class="remote-section-tab" id="remoteLoraTab" type="button" role="tab" aria-selected="false" aria-controls="remoteLoraPanel" tabindex="-1" data-remote-view="loras"><span class="remote-section-tab-icon" aria-hidden="true">L</span><span class="remote-section-tab-copy"><small>02 / 模型库</small><strong>LoRA</strong></span><span class="remote-section-tab-count" id="remoteLoraCount">—</span></button>
@@ -201,10 +231,20 @@ REMOTE_HTML = rf"""
     <button class="remote-section-tab" id="remoteEndpointsTab" type="button" role="tab" aria-selected="false" aria-controls="remoteEndpointsPanel" tabindex="-1" data-remote-view="endpoints"><span class="remote-section-tab-icon" aria-hidden="true">API</span><span class="remote-section-tab-copy"><small>04 / 模型接入</small><strong>模型服务</strong></span><span class="remote-section-tab-count" id="remoteEndpointsCount">—</span></button>
   </nav>
   <section class="remote-section-panel" id="remoteTasksPanel" role="tabpanel" aria-labelledby="remoteTasksTab" data-remote-panel="tasks">
+    <!-- PAIRING_GUIDE -->
     <div class="remote-grid" id="remoteNodeGrid"></div>
     <section class="remote-tasks"><div class="remote-tasks-head"><div><span class="section-label">Mac 发给 Windows 的工作</span><h2>任务状态</h2><p>先看“需要处理”：正在执行、等待接收或等待你导入的任务都会放在那里。完成、忽略、失败和取消的任务收在折叠的“历史记录”中。</p><p class="remote-task-summary" id="remoteTaskSummary">正在统计任务记录……</p></div><div class="remote-task-head-actions"><button id="remoteDismissReturned" type="button" hidden>忽略全部待接收旧记录</button><button class="danger" id="remoteCancelQueued" type="button" hidden>取消全部等待中的任务</button><button id="remoteTaskRefresh" type="button">刷新任务状态</button></div></div><div class="remote-task-guide"><strong>这里会出现哪些任务？</strong><p>这里只记录 Mac 与 <span data-remote-device-name>__PROMPT_HUB_DEVICE_NAME_HTML__</span> 之间的出图和模型清单更新，不是 LoRA 训练列表。通常只需看卡片里的“现在”说明；任务编号仅用于排查问题。</p><div class="remote-task-guide-grid"><div><b>ComfyUI 出图</b><span>把创作台的绘图请求交给 <span data-remote-device-name>__PROMPT_HUB_DEVICE_NAME_HTML__</span>，完成后把图片接回 Mac。</span></div><div><b>更新 LoRA 清单</b><span>读取 Windows 中的 LoRA 名称、分类、预览和来源，不复制模型文件。</span></div><div><b>更新底模清单</b><span>读取 Windows 中的底模、组件和示例图，不复制模型文件。</span></div></div></div><div class="remote-task-list" id="remoteTaskList"></div></section>
   </section>
   <section class="remote-section-panel" id="remoteLoraPanel" role="tabpanel" aria-labelledby="remoteLoraTab" data-remote-panel="loras" hidden>
+    <div class="remote-tag-feedback" aria-label="清单与翻译操作">
+      <div class="remote-result-actions">
+        <button id="remoteLoraReload" type="button">重新读取清单</button>
+        <button id="remoteLoraTranslate" type="button">AI 翻译当前页标签</button>
+        <button id="remoteLoraTranslateStop" type="button" hidden>停止翻译</button>
+      </div>
+      <p id="remoteLoraTranslationStatus" role="status" aria-live="polite">清单优先显示；AI 翻译仅在点击后运行。</p>
+      <progress id="remoteLoraTranslationProgress" aria-label="当前页标签翻译进度" max="1" value="0" hidden></progress>
+    </div>
     <section class="remote-lora"><div class="remote-lora-head"><div><span class="section-label">来自 LoRA Manager 的只读清单</span><h2>查看 Windows 上的 LoRA</h2><p id="remoteLoraStatus">正在读取 Windows 上一次发来的清单……</p></div><div class="remote-lora-tools"><button id="remoteLoraSync" type="button">从 Windows 更新清单</button><form class="remote-lora-search" id="remoteLoraSearch"><input id="remoteLoraQuery" placeholder="名称 / 路径 / 触发词 / 底模 / 标签"><button type="submit">查找 LoRA</button><button class="secondary" id="remoteLoraClear" type="button">清除筛选</button></form></div></div><div class="remote-lora-body"><nav class="remote-lora-tree" aria-label="LoRA 目录树"><div class="remote-lora-tree-title"><span>Windows 文件夹</span><span>LoRA 数量</span></div><ul id="remoteLoraTree"></ul></nav><div class="remote-lora-results"><div class="remote-lora-result-head"><p id="remoteLoraResultStatus">正在整理目录……</p><div class="remote-result-actions"><button id="remoteLoraResetPath" type="button" hidden>返回全部目录</button><nav class="remote-pagination" id="remoteLoraPagination" aria-label="LoRA 清单分页" hidden><button type="button" data-lora-page="previous">上一页</button><span id="remoteLoraPageStatus">第 1 / 1 页</span><button type="button" data-lora-page="next">下一页</button></nav></div></div><div class="remote-lora-grid" id="remoteLoraGrid"></div></div></div></section>
   </section>
   <section class="remote-section-panel" id="remoteModelPanel" role="tabpanel" aria-labelledby="remoteModelTab" data-remote-panel="models" hidden>
@@ -229,7 +269,7 @@ REMOTE_SCRIPT = r"""
   function setRemoteView(view,{focus=false}={}) { if(!['tasks','loras','models','endpoints'].includes(view)) return; state.remoteView=view; document.querySelectorAll('[data-remote-view]').forEach(tab=>{ const active=tab.dataset.remoteView===view; tab.setAttribute('aria-selected',String(active)); tab.tabIndex=active?0:-1; if(active&&focus) tab.focus(); }); document.querySelectorAll('[data-remote-panel]').forEach(panel=>{ panel.hidden=panel.dataset.remotePanel!==view; }); ensureRemoteViewData(view).catch(error=>console.error(error)); }
   window.openModelEndpoints=()=>{ setRemoteView('endpoints'); return window.setPromptHubView?.('remote'); };
   function combinedNodes() { return defaults.map(fallback=>({...fallback,...(state.nodes.find(item=>item.node_id===fallback.node_id)||{})})); }
-  function nodeCard(node) { const mountPlaceholder='/Volumes/PromptHub-Windows',roleLabel=node.role==='compute_5060ti'?'Windows 远程设备':node.role,saved=state.nodes.some(item=>item.node_id===node.node_id); return `<article class="remote-card" data-remote-node="${escapeHtml(node.node_id)}"><div class="remote-card-head"><div><span class="section-label">${escapeHtml(roleLabel)}</span><h2>${escapeHtml(node.label)}</h2></div><span class="remote-state" data-remote-state>${saved?'正在检查':'尚未配置'}</span></div><div class="remote-form"><label>主机名或局域网 IP<input data-node-field="host" value="${escapeHtml(node.host||'')}" placeholder="等待填写"></label><label>设备显示名<input data-node-field="label" value="${escapeHtml(node.label)}"></label><label class="wide">Mac 已连接的 Windows 文件夹<input data-node-field="smb_mount" value="${escapeHtml(node.smb_mount||'')}" placeholder="${mountPlaceholder}"></label><label class="remote-check wide"><input data-node-field="enabled" type="checkbox" ${node.enabled?'checked':''}> 启用这台设备</label></div><div class="remote-actions"><button class="primary" data-remote-action="save">保存设备信息</button><button data-remote-action="diagnose">检查是否连接成功</button><button data-remote-action="prepare">创建任务文件夹</button></div><div class="remote-message" data-remote-message>${saved?'正在自动检查共享目录与 Worker 状态…':`尚未配置。先在 Finder 连接 ${escapeHtml(node.label||deviceName())} 的共享文件夹，再填写这里。`}</div><div class="remote-worker-compatibility" data-remote-worker-version>${saved?'正在读取 Worker 版本…':'保存设备后显示 Worker 版本。'}</div></article>`; }
+  function nodeCard(node) { const mountPlaceholder='/Volumes/PromptHub-Windows',roleLabel=node.role==='compute_5060ti'?'Windows 远程设备':node.role,saved=state.nodes.some(item=>item.node_id===node.node_id); return `<article class="remote-card" data-remote-node="${escapeHtml(node.node_id)}"><div class="remote-card-head"><div><span class="section-label">${escapeHtml(roleLabel)}</span><h2>${escapeHtml(node.label)}</h2></div><span class="remote-state" data-remote-state>${saved?'正在检查':'尚未配置'}</span></div><div class="remote-form"><label>主机名或局域网 IP<input data-node-field="host" value="${escapeHtml(node.host||'')}" placeholder="等待填写"></label><label>设备显示名<input data-node-field="label" value="${escapeHtml(node.label)}"></label><label>Windows 共享名称<input data-node-field="smb_share" value="${escapeHtml(node.smb_share||'')}" placeholder="例如 PromptHub-5060Ti"></label><label class="wide">Mac 已连接的 Windows 文件夹<input data-node-field="smb_mount" value="${escapeHtml(node.smb_mount||'')}" placeholder="${mountPlaceholder}"></label><label class="remote-check wide"><input data-node-field="enabled" type="checkbox" ${node.enabled?'checked':''}> 启用这台设备</label></div><div class="remote-actions"><button class="primary" data-remote-action="save">保存设备信息</button><button data-remote-action="diagnose">检查是否连接成功</button><button data-remote-action="prepare">创建任务文件夹</button><button data-remote-action="connect">连接 Windows</button></div><div class="remote-message" data-remote-message>${saved?'正在自动检查共享目录与 Worker 状态…':`尚未配置。先在 Finder 连接 ${escapeHtml(node.label||deviceName())} 的共享文件夹，再填写这里。`}</div><div class="remote-worker-compatibility" data-remote-worker-version>${saved?'正在读取 Worker 版本…':'保存设备后显示 Worker 版本。'}</div></article>`; }
   function renderNodes() { $('#remoteNodeGrid').innerHTML=combinedNodes().map(nodeCard).join(''); }
   function taskTypeInfo() { return {comfyui_generate:{label:'ComfyUI 出图',purpose:`把创作台中的绘图请求交给 ${deviceName()}，生成结果可以接回 Mac。`},lora_catalog_snapshot:{label:'更新 LoRA 清单',purpose:'读取 Windows 中的 LoRA 名称、分类、预览图和 Civitai 来源，不复制模型文件。'},model_catalog_snapshot:{label:'更新底模清单',purpose:'读取 Windows 中的底模与组件清单、示例图和 Civitai 来源，不复制模型文件。'},embedding_batch:{label:'建立相似图索引（可选）',purpose:'批量计算以图找图所需的视觉特征，不是打标或训练。'},vlm_caption_batch:{label:'生成 Krea 2 描述草稿（可选）',purpose:'批量看图并生成 Krea 2 英文描述草稿，仍需在 Mac 人工确认。'},wd14_batch:{label:'WD14 批量打标',purpose:'为图片生成 Anima 标签草稿，不直接覆盖人工说明文字。'},lora_train:{label:'LoRA 训练任务（未接入）',purpose:'预留的旧任务类型；当前训练仍由你在 Windows 的 AnimaLoraStudio 中操作。'},checkpoint_test:{label:'模型测试出图',purpose:'使用指定模型生成测试图。'},workflow_test:{label:'工作流测试',purpose:'检查 ComfyUI 工作流能否正常运行。'},result_metadata:{label:'读取图片参数',purpose:'读取生成图片中已有的 ComfyUI 参数。'}}; }
   const catalogTaskTypes=new Set(['lora_catalog_snapshot','model_catalog_snapshot']);
@@ -252,7 +292,74 @@ REMOTE_SCRIPT = r"""
   function renderLoras(resetPage=false) { filterLoras(); renderLoraTree(); if(resetPage) state.loraPage=1; const pageSize=catalogPageSize(),pageCount=Math.max(1,Math.ceil(state.loras.length/pageSize)); state.loraPage=Math.min(Math.max(state.loraPage,1),pageCount); const start=(state.loraPage-1)*pageSize,pageItems=state.loras.slice(start,start+pageSize),tree=loraTreeData(),root=tree.find(item=>item.key===state.loraRoot),category=root?.categories.find(item=>item.key===state.loraCategory),path=[root?.label,category?.label].filter(Boolean).join(' / ')||'全部目录',query=state.loraQuery?` · 搜索“${state.loraQuery}”`:''; $('#remoteLoraResultStatus').textContent=`${path}${query} · ${state.loras.length?`显示 ${start+1}–${start+pageItems.length} / `:''}${state.loras.length} 个`; $('#remoteLoraResetPath').hidden=!state.loraRoot&&!state.loraQuery; updateCatalogPagination('lora',state.loraPage,pageCount,state.loras.length); $('#remoteLoraGrid').innerHTML=pageItems.length?pageItems.map(loraCard).join(''):state.catalog.length?'<div class="remote-empty"><strong>当前筛选没有结果</strong><span>可以切换左侧目录，或清除搜索条件。</span></div>':'<div class="remote-empty"><strong>还没有收到 Windows 的 LoRA 清单</strong><span>Windows 开机并运行 Worker 后，点击“从 Windows 更新清单”；Mac 只保存清单，不复制模型文件。</span></div>'; }
   async function loadNodes() { state.nodes=await api('/api/remote-nodes'); const primary=state.nodes.find(item=>item.node_id==='compute-5060ti')||state.nodes.find(item=>item.role==='compute_5060ti'); if(primary?.label) window.setPromptHubDeviceName?.(primary.label); renderNodes(); }
   async function loadTasks() { const groups=await Promise.all(state.nodes.map(async node=>{ try { const tasks=await api(`/api/remote-nodes/${encodeURIComponent(node.node_id)}/tasks?limit=100`); return tasks.map(item=>({...item,node_id:node.node_id,node_label:node.label})); } catch(error) { return []; } })); state.tasks=groups.flat().sort((a,b)=>String(b.updated_at||b.created_at).localeCompare(String(a.updated_at||a.created_at))); renderTasks(); }
-  async function loadLoras(query=state.loraQuery) { const status=await api('/api/windows-loras/status'); $('#remoteLoraStatus').textContent=status.available?`${status.count} 个 LoRA · ${status.with_preview_count||0} 个有示例图 · ${status.with_source_count||0} 个可以返回 Civitai · 共 ${status.preview_count||0} 张预览 · 不复制模型文件`:'还没有收到清单。保持 ComfyUI 与 Worker 运行，然后点击“从 Windows 更新清单”。'; const result=await api('/api/windows-loras?limit=500'); state.catalog=result.results||[]; state.loraLoaded=true; setRemoteTabCount('loras',state.catalog.length); state.loraQuery=query; if(!state.loraTreeReady) { loraTreeData().forEach(root=>{ if(root.key!=='anima') state.collapsedLoraRoots.add(root.key); }); state.loraTreeReady=true; } await window.ensureTagLabels?.(state.catalog.flatMap(item=>item.tags||[])); renderLoras(true); }
+  async function loadLoras(query=state.loraQuery) {
+    if(state.loraLoading) return state.loraLoading;
+    const read=window.fetchJsonWithTimeout||api;
+    $('#remoteLoraReload').disabled=true;
+    $('#remoteLoraStatus').textContent='正在读取已保存的清单…（不扫描模型文件）';
+    state.loraLoading=(async()=>{
+      try {
+        const status=await read('/api/windows-loras/status');
+        $('#remoteLoraStatus').textContent='正在加载 LoRA 条目…';
+        const result=await read('/api/windows-loras?limit=500');
+        state.catalog=result.results||[];
+        setRemoteTabCount('loras',state.catalog.length);
+        state.loraQuery=query;
+        if(!state.loraTreeReady) { loraTreeData().forEach(root=>{ if(root.key!=='anima') state.collapsedLoraRoots.add(root.key); }); state.loraTreeReady=true; }
+        renderLoras(true);
+        state.loraLoaded=true;
+        $('#remoteLoraStatus').textContent=status.available?`已显示 ${state.catalog.length} 个 LoRA · ${status.with_preview_count||0} 个有示例图 · ${status.with_source_count||0} 个有来源链接 · 不复制模型文件`:'还没有清单，请先更新清单；不会复制模型文件。';
+        const catalog=state.catalog;
+        const labelEpoch=state.loraLabelEpoch=(state.loraLabelEpoch||0)+1;
+        if(!state.loraTranslation) $('#remoteLoraTranslationStatus').textContent='清单已显示，正在读取词典与缓存；不会调用 AI…';
+        Promise.resolve(window.ensureTagLabels?.(catalog.flatMap(item=>item.tags||[]),{allowModel:false,timeoutMs:10000})).then(()=>{
+          if(state.catalog!==catalog) return;
+          renderLoras(false);
+          if(!state.loraTranslation&&state.loraLabelEpoch===labelEpoch) $('#remoteLoraTranslationStatus').textContent='词典与缓存已读取；未收录的标签保留英文，可手动 AI 翻译当前页。';
+        }).catch(error=>{
+          if(state.catalog===catalog&&!state.loraTranslation&&state.loraLabelEpoch===labelEpoch) $('#remoteLoraTranslationStatus').textContent=`词典与缓存读取失败：${error.message}；清单仍可浏览，未翻译标签保留英文。`;
+        });
+      } catch(error) {
+        $('#remoteLoraStatus').textContent=`清单读取失败：${error.message}。点击“重新读取清单”重试。`;
+        if(!state.loraLoaded) $('#remoteLoraResultStatus').textContent='清单未能加载，不是在等待翻译。';
+      } finally {
+        $('#remoteLoraReload').disabled=false;
+        state.loraLoading=null;
+      }
+    })();
+    return state.loraLoading;
+  }
+  async function translateLoraPage() {
+    if(state.loraTranslation) return;
+    state.loraLabelEpoch=(state.loraLabelEpoch||0)+1;
+    const controller=new AbortController(),button=$('#remoteLoraTranslate'),stop=$('#remoteLoraTranslateStop'),message=$('#remoteLoraTranslationStatus'),bar=$('#remoteLoraTranslationProgress');
+    state.loraTranslation=controller; button.disabled=true;
+    bar.hidden=true;
+    let timer,progress={processed:0,total:0,translated:0,untranslated:0},label='';
+    try {
+      message.textContent='正在确认翻译模型…';
+      const assist=await window.fetchJsonWithTimeout('/api/caption-assist',{},10000);
+      if(!assist.connection_id) { message.textContent='尚未接入翻译模型。请在“模型接入”添加可用模型，并选择翻译助手；当前标签保留英文。'; return; }
+      label=assist.label||assist.connection_id;
+      const start=(state.loraPage-1)*catalogPageSize(),tags=state.loras.slice(start,start+catalogPageSize()).flatMap(item=>(item.tags||[]).slice(0,12));
+      if(!tags.length) { message.textContent='当前页没有需要翻译的标签。'; return; }
+      if(!confirm(`使用 ${label} 翻译当前页尚无中文的标签？可能消耗 API 额度。每次只请求一个标签，本轮最多等待 90 秒；不会修改 LoRA 文件。`)) { message.textContent='未开始 AI 翻译，清单可正常浏览。'; return; }
+      stop.hidden=false; stop.disabled=false;
+      timer=setTimeout(()=>controller.abort(new Error('本轮已达到 90 秒上限')),90000);
+      await window.ensureTagLabels(tags,{allowModel:true,retryUnknown:true,batchSize:1,timeoutMs:65000,signal:controller.signal,onProgress:value=>{
+        progress=value;
+        bar.hidden=!value.total; bar.max=Math.max(value.total,1); bar.value=value.processed;
+        message.textContent=`${label} · 已处理 ${value.processed}/${value.total} · 新增中文 ${value.translated} · 保留英文 ${value.untranslated}${value.processed<value.total?' · 正在等待下一个标签（单项最多 65 秒）':''}`;
+        renderLoras(false);
+      }});
+      message.textContent=progress.total?`${label} · 本轮结束：已处理 ${progress.processed}/${progress.total}，新增中文 ${progress.translated}，${progress.untranslated} 个未获得译文、保留英文。`:'当前页标签已有中文，或没有可翻译的英文标签。';
+    } catch(error) {
+      const reason=controller.signal.aborted?controller.signal.reason?.message||'已停止':error.message;
+      message.textContent=`${label} · ${reason} · 已处理 ${progress.processed}/${progress.total}。已有译文保留；未处理标签仍为英文。已发出的服务端请求可能继续完成。`;
+    } finally {
+      clearTimeout(timer); state.loraTranslation=null; button.disabled=false; stop.hidden=true;
+    }
+  }
   const modelTypeLabels={checkpoint:'Checkpoint 底模',diffusion_model:'扩散模型 / UNet',vae:'VAE',text_encoder:'文本编码器',upscaler:'放大模型',controlnet:'ControlNet'};
   function modelKey(value) { return String(value||'').trim().toLocaleLowerCase(); }
   function modelLocation(item) { const parts=String(item.relative_path||'').split('/').filter(Boolean); return {type:String(item.asset_type||'unknown'),folder:parts.length>1?parts[0]:'根目录'}; }
@@ -322,15 +429,122 @@ REMOTE_SCRIPT = r"""
   function openAssetPreviews(item,label) { const dialog=$('#remotePreviewDialog'); if(!item||(item.preview_urls||[]).length===0) return; $('#remotePreviewTitle').textContent=item.name; $('#remotePreviewMeta').textContent=`${item.relative_path} · ${(item.preview_urls||[]).length} 张本机缓存${label}`; $('#remotePreviewGallery').innerHTML=item.preview_urls.map((url,index)=>`<a href="${escapeHtml(url)}" target="_blank" rel="noreferrer" title="在新窗口打开原图"><img src="${escapeHtml(url)}" alt="${escapeHtml(item.name)} ${escapeHtml(label)} ${index+1}" loading="lazy"></a>`).join(''); dialog.showModal(); }
   function openLoraPreviews(loraId) { openAssetPreviews(state.catalog.find(value=>value.lora_id===loraId),'LoRA 视觉参照'); }
   function openModelPreviews(assetId) { openAssetPreviews(state.modelsCatalog.find(value=>value.asset_id===assetId),'底模示例图'); }
-  function payload(card,node) { return {label:card.querySelector('[data-node-field="label"]').value.trim(),role:node.role,host:card.querySelector('[data-node-field="host"]').value.trim(),smb_mount:card.querySelector('[data-node-field="smb_mount"]').value.trim(),enabled:card.querySelector('[data-node-field="enabled"]').checked,capabilities:node.capabilities||[],notes:''}; }
-  function renderDiagnostic(card,result) { const message=card.querySelector('[data-remote-message]'),badge=card.querySelector('[data-remote-state]'),version=card.querySelector('[data-remote-worker-version]'),compatibility=result.worker_compatibility||{},compatibilityState=compatibility.state||'not_checked'; badge.textContent=compatibilityState==='incompatible'?'Worker 需要更新':result.worker_ready?'Windows 已就绪':remoteStateLabels[result.state]||'状态待确认'; badge.className=`remote-state ${compatibilityState==='incompatible'?'incompatible':result.state}`; message.textContent=compatibilityState==='incompatible'?'共享目录连接正常，但当前 Worker 无法与本版通信。更新 Worker 后请重新检查。':result.worker_ready?`Windows Worker 与本机 ComfyUI 已通过自检。Python / ${result.worker_status?.python||'未知'} · 设备 / ${result.worker_status?.hostname||'未知'}`:result.state==='ready'?'共享目录已就绪；等待 Windows 运行“1-先自检.bat”。':result.state==='mount_missing'?'Mac 还看不到这个 SMB 目录。请先在 Finder 连接服务器并挂载。':result.state==='mount_ready_bridge_unprepared'?'SMB 已挂载；可以建立五个交付目录。':result.state==='bridge_read_only'?'共享目录当前不可写，请检查 Windows 共享权限。':result.state==='not_configured'?'尚未填写主机地址和 SMB 挂载路径。':'当前状态需要进一步检查。'; version.className=`remote-worker-compatibility ${compatibilityState}`; version.textContent=compatibility.message||'Worker 版本尚未检查。'; }
-  async function diagnoseNode(card,nodeId) { const message=card.querySelector('[data-remote-message]'),badge=card.querySelector('[data-remote-state]'); badge.textContent='正在检查'; badge.className='remote-state'; message.textContent='正在检查共享目录与 Windows Worker 状态…'; try { const result=await api(`/api/remote-nodes/${encodeURIComponent(nodeId)}/diagnostics`); renderDiagnostic(card,result); return result; } catch(error) { badge.textContent='暂时无法检查'; badge.className='remote-state failed'; message.textContent=`暂时无法检查设备：${error.message}`; return null; } }
+  function payload(card,node) { return {label:card.querySelector('[data-node-field="label"]').value.trim(),role:node.role,host:card.querySelector('[data-node-field="host"]').value.trim(),smb_mount:card.querySelector('[data-node-field="smb_mount"]').value.trim()||(card.querySelector('[data-node-field="smb_share"]').value.trim()?'/Volumes/'+card.querySelector('[data-node-field="smb_share"]').value.trim():''),smb_share:card.querySelector('[data-node-field="smb_share"]').value.trim(),enabled:card.querySelector('[data-node-field="enabled"]').checked,capabilities:node.capabilities||[],notes:''}; }
+  function renderDiagnostic(card,result) { const message=card.querySelector('[data-remote-message]'),badge=card.querySelector('[data-remote-state]'),version=card.querySelector('[data-remote-worker-version]'),compatibility=result.worker_compatibility||{},compatibilityState=compatibility.state||'not_checked'; badge.textContent=compatibilityState==='incompatible'?'Worker 需要更新':result.worker_ready?'上次自检通过 · 正在确认在线状态':remoteStateLabels[result.state]||'状态待确认'; badge.className=`remote-state ${compatibilityState==='incompatible'?'incompatible':result.state}`; message.textContent=compatibilityState==='incompatible'?'共享目录连接正常，但当前 Worker 无法与本版通信。更新 Worker 后请重新检查。':result.worker_ready?`历史自检记录（不代表当前在线）：Python / ${result.worker_status?.python||'未知'} · 设备 / ${result.worker_status?.hostname||'未知'}`:result.state==='ready'?'共享目录已就绪；等待 Windows 运行“1-先自检.bat”。':result.state==='mount_missing'?'Mac 还看不到这个 SMB 目录。请先在 Finder 连接服务器并挂载。':result.state==='mount_ready_bridge_unprepared'?'SMB 已挂载；可以建立五个交付目录。':result.state==='bridge_read_only'?'共享目录当前不可写，请检查 Windows 共享权限。':result.state==='not_configured'?'尚未填写主机地址和 SMB 挂载路径。':'当前状态需要进一步检查。'; version.className=`remote-worker-compatibility ${compatibilityState}`; version.textContent=compatibility.message||'Worker 版本尚未检查。'; }
+  async function diagnoseNode(card,nodeId) { const message=card.querySelector('[data-remote-message]'),badge=card.querySelector('[data-remote-state]'); badge.textContent='正在检查'; badge.className='remote-state'; message.textContent='正在检查共享目录与 Windows Worker 状态…'; try { const result=await api(`/api/remote-nodes/${encodeURIComponent(nodeId)}/diagnostics`,{signal:AbortSignal.timeout(15000)}); renderDiagnostic(card,result); return result; } catch(error) { badge.textContent='暂时无法检查'; badge.className='remote-state failed'; message.textContent=`暂时无法检查设备：${['TimeoutError','AbortError'].includes(error.name)?'检查超时，请确认共享目录可访问后重试。':error.message}`; return null; } }
   async function diagnoseSavedNodes() { await Promise.all(state.nodes.map(node=>{ const card=[...document.querySelectorAll('[data-remote-node]')].find(item=>item.dataset.remoteNode===node.node_id); return card?diagnoseNode(card,node.node_id):Promise.resolve(null); })); }
-  async function act(card,action) { const nodeId=card.dataset.remoteNode,node=combinedNodes().find(item=>item.node_id===nodeId),message=card.querySelector('[data-remote-message]'); if(action==='save') { const saved=await api(`/api/remote-nodes/${encodeURIComponent(nodeId)}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload(card,node))}); state.nodes=state.nodes.filter(item=>item.node_id!==nodeId).concat(saved); message.textContent='设备位置已保存；未保存任何用户名或密码。正在检查连接…'; await diagnoseNode(card,nodeId); return; } if(action==='diagnose') { await diagnoseNode(card,nodeId); return; } if(action==='prepare'&&!confirm('确认在已挂载的 SMB 目录中建立 prompt-hub/outbox、inbox、processing、completed、failed 五个文件夹？')) return; const result=await api(`/api/remote-nodes/${encodeURIComponent(nodeId)}/prepare`,{method:'POST'}); renderDiagnostic(card,result); }
-  async function ensure() { await loadNodes(); await Promise.all([diagnoseSavedNodes(),loadCatalogCounts(),loadTasks(),loadEndpoints()]); }
+  async function act(card,action) {
+    const nodeId=card.dataset.remoteNode,node=combinedNodes().find(item=>item.node_id===nodeId);
+    if(action==='connect') {
+      const result=await api(`/api/remote-nodes/${encodeURIComponent(nodeId)}/connect`,{method:'POST',signal:AbortSignal.timeout(10000)});
+      return {tone:'warning',text:result.message+' 登录后请点击检查连接。'};
+    }
+    if(action==='save') {
+      const saved=await api(`/api/remote-nodes/${encodeURIComponent(nodeId)}`,{method:'PUT',signal:AbortSignal.timeout(15000),headers:{'Content-Type':'application/json'},body:JSON.stringify(payload(card,node))});
+      state.nodes=state.nodes.filter(item=>item.node_id!==nodeId).concat(saved);
+      const result=await diagnoseNode(card,nodeId);
+      return {tone:result?'success':'warning',text:result?'设备信息已保存。连接检查结果见下方。':'设备信息已保存，但连接检查未完成，请重试检查。'};
+    }
+    if(action==='diagnose') {
+      const result=await diagnoseNode(card,nodeId);
+      if(!result) return {tone:'error',text:'检查未完成。请查看下方原因，然后重新检查。'};
+      const ready=result.state==='ready'&&result.worker_compatibility?.state!=='incompatible';
+      return {tone:ready?'success':'warning',text:ready?'检查完成：共享目录可读写。Worker 自检详情见下方。':'检查完成：设备仍需处理，请按下方说明操作。'};
+    }
+    if(action==='prepare') {
+      if(!confirm('确认在已挂载的 SMB 目录中建立 prompt-hub/outbox、inbox、processing、completed、failed 五个文件夹？')) return {tone:'warning',text:'已取消，没有创建文件夹。'};
+      const result=await api(`/api/remote-nodes/${encodeURIComponent(nodeId)}/prepare`,{method:'POST',signal:AbortSignal.timeout(15000)});
+      renderDiagnostic(card,result);
+      return {tone:result.state==='ready'?'success':'warning',text:result.state==='ready'?'任务文件夹已就绪。已有目录保留，不会清空任务或重复创建。':'文件夹操作已返回，但共享目录尚未就绪，请检查下方状态。'};
+    }
+    throw new Error('未知设备操作');
+  }
+  async function runNodeAction(card,button) {
+    if(card.dataset.actionBusy==='true') return;
+    const action=button.dataset.remoteAction;
+    let feedback=card.querySelector('[data-remote-action-feedback]');
+    if(!feedback) {
+      feedback=document.createElement('div');
+      feedback.className='remote-action-feedback';
+      feedback.setAttribute('data-remote-action-feedback','');
+      feedback.setAttribute('role','status');
+      feedback.setAttribute('aria-live','polite');
+      feedback.setAttribute('aria-atomic','true');
+      card.querySelector('.remote-actions').after(feedback);
+    }
+    const controls=[...card.querySelectorAll('[data-remote-action], [data-node-field]')];
+    const disabled=controls.map(control=>control.disabled),label=button.textContent;
+    card.dataset.actionBusy='true';
+    controls.forEach(control=>control.disabled=true);
+    button.setAttribute('aria-busy','true');
+    button.textContent={save:'正在保存…',diagnose:'正在检查…',prepare:'正在准备…',connect:'正在连接…'}[action];
+    feedback.hidden=false;
+    feedback.dataset.tone='busy';
+    feedback.textContent={save:'正在保存设备信息，请稍候…',diagnose:'正在检查共享目录与 Worker 状态，请稍候…',prepare:'正在准备任务文件夹，请确认系统提示…',connect:'正在打开系统连接窗口…'}[action];
+    try {
+      const result=await act(card,action);
+      feedback.dataset.tone=result.tone;
+      feedback.textContent=`${result.text} · ${new Date().toLocaleTimeString()}`;
+    } catch(error) {
+      feedback.dataset.tone='error';
+      const detail=['TimeoutError','AbortError'].includes(error.name)?'等待响应超时。操作可能已在后台完成，请先检查状态再重试。':error.message;
+      feedback.textContent=`操作未确认完成：${detail} · ${new Date().toLocaleTimeString()}`;
+    } finally {
+      delete card.dataset.actionBusy;
+      controls.forEach((control,index)=>control.disabled=disabled[index]);
+      button.removeAttribute('aria-busy');
+      button.textContent=label;
+    }
+  }
+  async function applyUsageMode() {
+    const summary=await api('/api/desktop/connection');
+    if(summary.mode!=='windows_local') return;
+    const page=$('#remotePage');
+    document.querySelector('[data-view="remote"]').textContent='设备连接';
+    page.querySelector('h1').textContent='设备连接';
+    page.querySelector('.remote-copy .eyebrow').textContent='Windows 单机模式';
+    page.querySelector('.remote-copy p').textContent='工作台与 Worker 在这台电脑上运行，无需连接另一台设备。连接本机 ComfyUI 后即可使用计算功能。';
+    page.querySelector('.remote-tasks-head .section-label').textContent='本机计算任务';
+    page.querySelector('.remote-task-guide > p').textContent='这里记录本机出图和模型清单更新。任务完成后可接收结果。';
+    page.querySelector('aside')?.setAttribute('hidden','');
+    page.querySelectorAll('#remoteNodeGrid .remote-form,#remoteNodeGrid .remote-actions').forEach(element=>element.hidden=true);
+    page.querySelectorAll('[data-remote-node]').forEach(card=>{
+      card.querySelector('h2').textContent='本机 Windows';
+      card.querySelector('.section-label').textContent='本机计算服务';
+      card.querySelector('[data-remote-state]').textContent=summary.label;
+      card.querySelector('[data-remote-worker-version]').textContent='本机服务由 Windows 启动器管理，无需另外打开 Worker。';
+      card.querySelector('[data-remote-message]').textContent='本机模式无需配对其他设备。Worker 随启动器自动运行；请在启动器设置中填写本机 ComfyUI 地址。';
+    });
+    page.dataset.usageMode='windows_local';
+  }
+  function renderLiveConnection(card,summary) {
+    const badge=card.querySelector('[data-remote-state]');
+    badge.textContent=summary.label;
+    badge.className=`remote-state ${summary.can_compute?'ready':'failed'}`;
+    const age=summary.heartbeat_age_seconds;
+    card.querySelector('[data-remote-message]').textContent=summary.detail+
+      (age==null?'':` · 心跳 ${age} 秒前`);
+  }
+  let liveConnectionBusy=false;
+  async function refreshLiveConnections() {
+    if(liveConnectionBusy) return;
+    liveConnectionBusy=true;
+    try {
+      await Promise.all([...document.querySelectorAll('[data-remote-node]')].map(async card=>{
+        try {
+          const summary=await api(`/api/desktop/connection?node_id=${encodeURIComponent(card.dataset.remoteNode)}`,{signal:AbortSignal.timeout(4000)});
+          renderLiveConnection(card,summary);
+        } catch(error) {
+          renderLiveConnection(card,{label:'连接状态暂时无法确认',detail:'实时检查失败，请检查本机服务与共享目录。',can_compute:false});
+        }
+      }));
+    } finally { liveConnectionBusy=false; }
+  }
+  async function ensure() { await loadNodes(); await Promise.all([diagnoseSavedNodes(),loadCatalogCounts(),loadTasks(),loadEndpoints()]); await applyUsageMode(); await refreshLiveConnections(); }
+  window.addEventListener('prompt-hub-pairing-saved',()=>loadNodes().then(diagnoseSavedNodes).catch(console.error));
   $('#remoteSectionTabs').addEventListener('click',event=>{ const tab=event.target.closest('[data-remote-view]'); if(tab) setRemoteView(tab.dataset.remoteView); });
   $('#remoteSectionTabs').addEventListener('keydown',event=>{ if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return; const tabs=[...document.querySelectorAll('[data-remote-view]')],current=tabs.indexOf(event.target.closest('[data-remote-view]')); if(current<0) return; event.preventDefault(); const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(current+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length; setRemoteView(tabs[next].dataset.remoteView,{focus:true}); });
-  $('#remoteNodeGrid').addEventListener('click',event=>{ const button=event.target.closest('[data-remote-action]'); if(!button) return; const card=button.closest('[data-remote-node]'); button.disabled=true; act(card,button.dataset.remoteAction).catch(error=>card.querySelector('[data-remote-message]').textContent=error.message).finally(()=>button.disabled=false); });
+  $('#remoteNodeGrid').addEventListener('click',event=>{ const button=event.target.closest('[data-remote-action]'); if(!button) return; runNodeAction(button.closest('[data-remote-node]'),button); });
   $('#remoteNodeGrid').addEventListener('input',event=>{ if(event.target.matches('[data-node-field="label"]')) { window.setPromptHubDeviceName?.(event.target.value); renderTasks(); } });
   $('#remoteLoraSearch').addEventListener('submit',event=>{ event.preventDefault(); state.loraQuery=$('#remoteLoraQuery').value.trim(); renderLoras(true); });
   $('#remoteLoraTree').addEventListener('click',event=>{ const toggle=event.target.closest('[data-lora-tree-toggle]'); if(toggle) { const key=toggle.dataset.loraTreeToggle; if(state.collapsedLoraRoots.has(key)) state.collapsedLoraRoots.delete(key); else state.collapsedLoraRoots.add(key); renderLoraTree(); return; } const filter=event.target.closest('[data-lora-root]'); if(!filter) return; state.loraRoot=filter.dataset.loraRoot||''; state.loraCategory=filter.dataset.loraCategory||''; if(state.loraRoot) state.collapsedLoraRoots.delete(state.loraRoot); renderLoras(true); });
@@ -367,9 +581,20 @@ REMOTE_SCRIPT = r"""
   $('#remoteTaskRefresh').addEventListener('click',()=>loadTasks().catch(console.error));
   $('#remoteDismissReturned').addEventListener('click',async event=>{ const returned=state.tasks.filter(item=>item.status==='returned'&&item.result_status==='completed'); if(!returned.length) return; if(!confirm(`忽略 ${returned.length} 条等待接收的旧记录？这不会导入图片或清单，只会把记录移入历史；Windows 返回的原文件仍会保留。`)) return; const button=event.currentTarget,originalLabel=button.textContent; button.disabled=true; button.textContent='正在批量忽略…'; let dismissed=0,failed=0; for(const item of returned) { try { await api(`/api/remote-nodes/${encodeURIComponent(item.node_id)}/tasks/${encodeURIComponent(item.task_id)}/dismiss`,{method:'POST'}); dismissed+=1; } catch(error) { failed+=1; } } await loadTasks(); alert(failed?`已忽略 ${dismissed} 条，另有 ${failed} 条状态已变化或处理失败，请刷新后查看。`:`已忽略 ${dismissed} 条旧记录；没有导入结果，原文件仍保留。`); button.disabled=false; button.textContent=originalLabel; });
   $('#remoteCancelQueued').addEventListener('click',async event=>{ const queued=state.tasks.filter(item=>item.status==='queued'); if(!queued.length) return; if(!confirm(`取消 ${queued.length} 条仍在等待 Windows 领取的任务？正在执行和等待接收的任务不会受影响。`)) return; const button=event.currentTarget,originalLabel=button.textContent; button.disabled=true; button.textContent='正在批量取消…'; let canceled=0,failed=0; for(const item of queued) { try { await api(`/api/remote-nodes/${encodeURIComponent(item.node_id)}/tasks/${encodeURIComponent(item.task_id)}/cancel`,{method:'POST'}); canceled+=1; } catch(error) { failed+=1; } } await loadTasks(); alert(failed?`已取消 ${canceled} 条，另有 ${failed} 条状态已变化或取消失败，请刷新后查看。`:`已取消 ${canceled} 条等待中的任务。`); button.disabled=false; button.textContent=originalLabel; });
-  $('#remoteTaskList').addEventListener('click',event=>{ const more=event.target.closest('#remoteTaskMore'); if(more) { state.showAllTasks=!state.showAllTasks; renderTasks(); return; } const button=event.target.closest('[data-task-action]'); if(!button) return; const action=button.dataset.taskAction, taskId=button.dataset.taskId, nodeId=button.dataset.taskNode, base=`/api/remote-nodes/${encodeURIComponent(nodeId)}/tasks/${encodeURIComponent(taskId)}`; if(action==='retry'&&!confirm(`重新投递失败任务 ${taskId}？旧失败记录会保留。`)) return; if(action==='cancel'&&!confirm(`取消任务 ${taskId}？已开始的 ComfyUI 任务会请求中断。`)) return; if(action==='dismiss'&&!confirm('忽略这条等待接收的旧记录？这不会导入图片或清单，只会把记录移入历史；Windows 返回的原文件仍会保留。')) return; const originalLabel=button.textContent; button.disabled=true; button.setAttribute('aria-busy','true'); button.textContent=taskBusyLabels[action]||'正在处理…'; const request=action==='integrity'?api(`${base}/integrity`):action==='import'?api(`/api/workflow-tasks/${encodeURIComponent(taskId)}/import-results`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({node_id:nodeId})}):action==='import-loras'?api(`${base}/import-lora-catalog`,{method:'POST'}):action==='import-models'?api(`${base}/import-model-catalog`,{method:'POST'}):api(`${base}/${action}`,{method:'POST'}); request.then(async result=>{ if(action==='integrity') alert(result.verified?`校验通过：${result.output_count} 个回传文件完整。`:`校验未通过：\n${(result.errors||[]).join('\n')}`); if(action==='import') alert(`已导入 ${result.image_count} 张图片${result.duplicates?`（${result.duplicates} 张已存在）`:''}${result.associated?'，并关联到原创作项目。':'。'}`); if(action==='import-loras') { alert(`已导入 ${result.count} 个 LoRA 条目，其中 ${result.with_preview_count||0} 个带视觉参照，共 ${result.preview_count||0} 张；权重未复制。`); await loadLoras($('#remoteLoraQuery').value.trim()); } if(action==='import-models') { alert(`已导入 ${result.count} 个模型资产，其中 ${result.with_preview_count||0} 个带示例图，共 ${result.preview_count||0} 张；权重未复制。`); await loadModels($('#remoteModelQuery').value.trim()); } if(action==='dismiss') alert('已移入历史记录；没有导入结果，Windows 返回的原文件仍保留。'); return loadTasks(); }).catch(error=>alert(error.message)).finally(()=>{ button.disabled=false; button.removeAttribute('aria-busy'); button.textContent=originalLabel; }); });
-  window.addEventListener('tag-language-change',renderLoras);
+  $('#remoteTaskList').addEventListener('click',event=>{ const more=event.target.closest('#remoteTaskMore'); if(more) { state.showAllTasks=!state.showAllTasks; renderTasks(); return; } const button=event.target.closest('[data-task-action]'); if(!button) return; const action=button.dataset.taskAction, taskId=button.dataset.taskId, nodeId=button.dataset.taskNode, base=`/api/remote-nodes/${encodeURIComponent(nodeId)}/tasks/${encodeURIComponent(taskId)}`; if(action==='retry'&&!confirm(`重新投递失败任务 ${taskId}？旧失败记录会保留。`)) return; if(action==='cancel'&&!confirm(`取消任务 ${taskId}？已开始的 ComfyUI 任务会请求中断。`)) return; if(action==='dismiss'&&!confirm('忽略这条等待接收的旧记录？这不会导入图片或清单，只会把记录移入历史；Windows 返回的原文件仍会保留。')) return; const originalLabel=button.textContent; button.disabled=true; button.setAttribute('aria-busy','true'); button.textContent=taskBusyLabels[action]||'正在处理…'; const request=action==='integrity'?api(`${base}/integrity`):action==='import'?api(`/api/workflow-tasks/${encodeURIComponent(taskId)}/import-results`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({node_id:nodeId})}):action==='import-loras'?api(`${base}/import-lora-catalog`,{method:'POST'}):action==='import-models'?api(`${base}/import-model-catalog`,{method:'POST'}):api(`${base}/${action}`,{method:'POST'}); request.then(async result=>{ if(action==='integrity') alert(result.verified?`校验通过：${result.output_count} 个回传文件完整。`:`校验未通过：\n${(result.errors||[]).join('\n')}`); if(action==='import') { window.dispatchEvent(new CustomEvent('prompt-hub-results-imported',{detail:{project_id:result.project_id}})); alert(`已导入 ${result.image_count} 张图片${result.duplicates?`（${result.duplicates} 张已存在）`:''}${result.associated?'，并关联到原创作项目。':'。'}`); } if(action==='import-loras') { alert(`已导入 ${result.count} 个 LoRA 条目，其中 ${result.with_preview_count||0} 个带视觉参照，共 ${result.preview_count||0} 张；权重未复制。`); await loadLoras($('#remoteLoraQuery').value.trim()); } if(action==='import-models') { alert(`已导入 ${result.count} 个模型资产，其中 ${result.with_preview_count||0} 个带示例图，共 ${result.preview_count||0} 张；权重未复制。`); await loadModels($('#remoteModelQuery').value.trim()); } if(action==='dismiss') alert('已移入历史记录；没有导入结果，Windows 返回的原文件仍保留。'); return loadTasks(); }).catch(error=>alert(error.message)).finally(()=>{ button.disabled=false; button.removeAttribute('aria-busy'); button.textContent=originalLabel; }); });
+  $('#remoteLoraReload').addEventListener('click',()=>loadLoras());
+  $('#remoteLoraTranslate').addEventListener('click',translateLoraPage);
+  $('#remoteLoraTranslateStop').addEventListener('click',()=>{
+    $('#remoteLoraTranslateStop').disabled=true;
+    state.loraTranslation?.abort(new Error('已停止后续翻译'));
+  });
+  window.addEventListener('tag-language-change',()=>{ if(state.loraLoaded) renderLoras(false); });
   window.ensureRemoteDevices=ensure;
+  setInterval(()=>{ if(!document.hidden && !$('#remotePage').hidden) refreshLiveConnections(); },5000);
 })();
 </script>
 """
+
+REMOTE_HTML = REMOTE_HTML.replace("<!-- PAIRING_GUIDE -->", PAIRING_HTML)
+REMOTE_STYLES += PAIRING_STYLES
+REMOTE_SCRIPT += PAIRING_SCRIPT

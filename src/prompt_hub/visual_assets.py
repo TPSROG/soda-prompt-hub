@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import hashlib
+import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 from urllib.parse import quote
 
 from prompt_hub.media import resolve_media_path
 from prompt_hub.result_media import resolve_result_image
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
+
     from prompt_hub.comfy_results import ComfyResultStore
     from prompt_hub.config import Settings
     from prompt_hub.creative import CreativeStore
@@ -17,6 +20,11 @@ if TYPE_CHECKING:
     from prompt_hub.dataset_workspace import DatasetWorkspaceStore
     from prompt_hub.remote_nodes import RemoteNodeStore
     from prompt_hub.web_capture import WebCaptureService
+
+
+class DiscoveryContext(Protocol):
+    def update(self, current: int, total: int, message: str = "") -> None: ...
+
 
 VISUAL_ASSET_TYPES = {
     "prompt_visual",
@@ -67,7 +75,13 @@ class VisualAssetCatalog:
         self.remote_store = remote_store
         self.web_capture = web_capture
 
-    def discover(self, asset_types: set[str] | None = None) -> list[VisualAsset]:
+    def discover(  # noqa: C901 - per-collector checkpoints share one bounded progress callback
+        self,
+        asset_types: set[str] | None = None,
+        *,
+        context: DiscoveryContext | None = None,
+        max_items: int = 0,
+    ) -> list[VisualAsset]:
         selected = asset_types or VISUAL_ASSET_TYPES
         assets: dict[str, VisualAsset] = {}
         collectors = (
@@ -79,21 +93,40 @@ class VisualAssetCatalog:
             ("model_preview", self._model_previews),
             ("web_visual", self._web_visuals),
         )
+        last_update = 0.0
+
+        def progress(message: str) -> None:
+            nonlocal last_update
+            if context is None:
+                return
+            check = getattr(context, "raise_if_cancelled", None)
+            if check is not None:
+                check()
+            now = time.monotonic()
+            if now - last_update >= 0.25:
+                context.update(len(assets), 0, f"扫描素材 · 已发现 {len(assets)} 张 · {message}")
+                last_update = now
+
         for asset_type, collector in collectors:
             if asset_type not in selected:
                 continue
-            for asset in collector():
+            if context is not None:
+                context.update(len(assets), 0, f"扫描素材类别: {asset_type}")
+            for asset in collector(progress):
                 if asset.path.is_file():
                     assets.setdefault(asset.asset_id, asset)
+                    if max_items and len(assets) >= max_items:
+                        return list(assets.values())
         return sorted(assets.values(), key=lambda item: (item.asset_type, item.asset_id))
 
-    def _prompt_visuals(self) -> list[VisualAsset]:
-        found = []
+    def _prompt_visuals(self, progress: Callable[[str], None]) -> Iterator[VisualAsset]:
         seen_paths: set[Path] = set()
         for entry in self.database.list_visual_entries():
+            progress("正在检查素材记录")
             metadata = entry.get("metadata", {})
             refs = metadata.get("image_refs", []) if isinstance(metadata, dict) else []
             for index, ref in enumerate(refs if isinstance(refs, list) else []):
+                progress("正在检查素材记录")
                 if not isinstance(ref, dict):
                     continue
                 relative = str(ref.get("path", ""))
@@ -109,7 +142,7 @@ class VisualAssetCatalog:
                 original_variant = (
                     "thumbnail" if ref.get("original_variant") == "thumbnail" else "original"
                 )
-                found.append(
+                yield (
                     _asset(
                         "prompt_visual",
                         f"prompt:{entry['source_id']}:{entry['external_id']}:{index}",
@@ -128,24 +161,25 @@ class VisualAssetCatalog:
                                 f"{quote(relative, safe='/')}"
                             ),
                         },
+                        progress=progress,
                     )
                 )
-        return found
 
-    def _dataset_images(self) -> list[VisualAsset]:
-        found = []
+    def _dataset_images(self, progress: Callable[[str], None]) -> Iterator[VisualAsset]:
         for workspace in self.workspace_store.list_workspaces():
+            progress("正在检查素材记录")
             workspace_id = str(workspace.get("workspace_id", ""))
             report = self.workspace_store.read_current_report(workspace_id) or {}
             source = Path(str(workspace.get("source_path", "")))
             for image in report.get("images", []):
+                progress("正在检查素材记录")
                 if not isinstance(image, dict) or not image.get("valid"):
                     continue
                 relative = str(image.get("relative_path", ""))
                 path = (source / relative).resolve()
                 if not path.is_file() or not path.is_relative_to(source.resolve()):
                     continue
-                found.append(
+                yield (
                     _asset(
                         "dataset_image",
                         f"dataset:{workspace_id}:{relative}",
@@ -168,17 +202,18 @@ class VisualAssetCatalog:
                             "caption": image.get("caption", ""),
                         },
                         known_hash=str(image.get("sha256", "")),
+                        progress=progress,
                     )
                 )
-        return found
 
-    def _creative_results(self) -> list[VisualAsset]:
-        found = []
+    def _creative_results(self, progress: Callable[[str], None]) -> Iterator[VisualAsset]:
         for project in self.creative_store.list_projects(limit=1000):
+            progress("正在检查素材记录")
             project_id = str(project.get("project_id", ""))
             generation = project.get("generation", {})
             raw_assets = generation.get("result_assets", []) if isinstance(generation, dict) else []
             for item in raw_assets if isinstance(raw_assets, list) else []:
+                progress("正在检查素材记录")
                 if not isinstance(item, dict):
                     continue
                 asset_id = str(item.get("asset_id", ""))
@@ -190,7 +225,7 @@ class VisualAssetCatalog:
                 )
                 if path is None:
                     continue
-                found.append(
+                yield (
                     _asset(
                         "result_image",
                         f"result:{project_id}:{asset_id}",
@@ -205,18 +240,23 @@ class VisualAssetCatalog:
                             "project_id": project_id,
                         },
                         known_hash=str(item.get("sha256", "")),
+                        progress=progress,
                     )
                 )
-        return found
 
-    def _comfy_results(self) -> list[VisualAsset]:
-        found = []
+    def _comfy_results(self, progress: Callable[[str], None]) -> Iterator[VisualAsset]:
         for item in self.comfy_store.list_results(limit=2000):
+            progress("正在检查素材记录")
             result_id = str(item.get("result_id", ""))
-            path = self.comfy_store.resolve_media(result_id, "original")
-            if path is None:
+            # Reuse the loaded record; resolve_media would parse the full index per image.
+            filename = str(item.get("original_name", ""))
+            if not filename or Path(filename).name != filename:
                 continue
-            found.append(
+            root = (self.comfy_store.root / "original").resolve()
+            path = (root / filename).resolve()
+            if not path.is_relative_to(root) or not path.is_file():
+                continue
+            yield (
                 _asset(
                     "comfy_result",
                     f"comfy:{result_id}",
@@ -231,18 +271,19 @@ class VisualAssetCatalog:
                         "result_id": result_id,
                     },
                     known_hash=str(item.get("sha256", "")),
+                    progress=progress,
                 )
             )
-        return found
 
-    def _lora_previews(self) -> list[VisualAsset]:
+    def _lora_previews(self, progress: Callable[[str], None]) -> Iterator[VisualAsset]:
         status = self.remote_store.lora_catalog_status()
         snapshot_id = str(status.get("snapshot_id", ""))
-        found = []
         for item in self.remote_store.search_loras(limit=500):
+            progress("正在检查素材记录")
             lora_id = str(item.get("lora_id", ""))
             files = item.get("preview_files", [])
             for preview in files if isinstance(files, list) else []:
+                progress("正在检查素材记录")
                 if not isinstance(preview, dict):
                     continue
                 filename = str(preview.get("filename", ""))
@@ -253,7 +294,7 @@ class VisualAssetCatalog:
                     / lora_id
                     / filename
                 )
-                found.append(
+                yield (
                     _asset(
                         "lora_preview",
                         f"lora:{snapshot_id}:{lora_id}:{filename}",
@@ -273,18 +314,19 @@ class VisualAssetCatalog:
                             "lora_id": lora_id,
                         },
                         known_hash=str(preview.get("sha256", "")),
+                        progress=progress,
                     )
                 )
-        return found
 
-    def _model_previews(self) -> list[VisualAsset]:
+    def _model_previews(self, progress: Callable[[str], None]) -> Iterator[VisualAsset]:
         status = self.remote_store.model_catalog_status()
         snapshot_id = str(status.get("snapshot_id", ""))
-        found = []
         for item in self.remote_store.search_models(limit=2000):
+            progress("正在检查素材记录")
             asset_id = str(item.get("asset_id", ""))
             files = item.get("preview_files", [])
             for preview in files if isinstance(files, list) else []:
+                progress("正在检查素材记录")
                 if not isinstance(preview, dict):
                     continue
                 filename = str(preview.get("filename", ""))
@@ -295,7 +337,7 @@ class VisualAssetCatalog:
                     / asset_id
                     / filename
                 )
-                found.append(
+                yield (
                     _asset(
                         "model_preview",
                         f"model:{snapshot_id}:{asset_id}:{filename}",
@@ -315,13 +357,13 @@ class VisualAssetCatalog:
                             "model_asset_id": asset_id,
                         },
                         known_hash=str(preview.get("sha256", "")),
+                        progress=progress,
                     )
                 )
-        return found
 
-    def _web_visuals(self) -> list[VisualAsset]:
-        found = []
+    def _web_visuals(self, progress: Callable[[str], None]) -> Iterator[VisualAsset]:
         for item in self.web_capture.list_captures():
+            progress("正在检查素材记录")
             if item.get("media_kind") != "image":
                 continue
             capture_id = str(item.get("capture_id", ""))
@@ -329,7 +371,7 @@ class VisualAssetCatalog:
                 path = self.web_capture.resolve_media(capture_id)
             except ValueError:
                 continue
-            found.append(
+            yield (
                 _asset(
                     "web_visual",
                     f"web:{capture_id}",
@@ -344,9 +386,9 @@ class VisualAssetCatalog:
                         "capture_id": capture_id,
                     },
                     known_hash=str(item.get("content_sha256", "")),
+                    progress=progress,
                 )
             )
-        return found
 
 
 def _asset(
@@ -356,10 +398,21 @@ def _asset(
     metadata: dict[str, Any],
     *,
     known_hash: str = "",
+    progress: Callable[[str], None] | None = None,
 ) -> VisualAsset:
     digest = known_hash.lower()
     if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
-        digest = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else ""
+        if progress is not None:
+            progress(path.name)
+        digest = ""
+        if path.is_file():
+            hasher = hashlib.sha256()
+            with path.open("rb") as stream:
+                while chunk := stream.read(1024 * 1024):
+                    if progress is not None:
+                        progress(f"校验 {path.name}")
+                    hasher.update(chunk)
+            digest = hasher.hexdigest()
     stable_id = hashlib.sha256(asset_id.encode()).hexdigest()[:32]
     return VisualAsset(
         asset_id=f"visual-{stable_id}",

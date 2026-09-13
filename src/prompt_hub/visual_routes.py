@@ -165,7 +165,7 @@ def _register_model_routes(
 ) -> None:
     @router.post("/api/visual-index/model/download", status_code=status.HTTP_202_ACCEPTED)
     def download_visual_model() -> dict[str, Any]:
-        job = job_runner.submit(DOWNLOAD_JOB_TYPE, {})
+        job = job_runner.submit(DOWNLOAD_JOB_TYPE, {}, exclusive=True)
         return {"job": job}
 
     @router.get("/api/visual-index/model/candidates")

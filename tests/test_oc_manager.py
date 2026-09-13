@@ -5,7 +5,7 @@ import json
 import pytest
 
 from prompt_hub.database import PromptDatabase
-from prompt_hub.oc_manager import archive_import, parse_oc_manager_json
+from prompt_hub.oc_manager import archive_import, build_oc_creative_seed, parse_oc_manager_json
 
 
 def _full_export() -> bytes:
@@ -122,6 +122,77 @@ def test_parse_supported_oc_manager_formats() -> None:
         parse_oc_manager_json(b'[{"id":"missing-name"}]')
     with pytest.raises(ValueError, match="Invalid OC Manager JSON"):
         parse_oc_manager_json(b"not-json")
+
+
+def test_build_oc_creative_seed_normalizes_layers_outfits_and_context() -> None:
+    character = {
+        "id": "char-seed",
+        "name": "露娜",
+        "world": "夜城",
+        "gender": "女",
+        "age": 24,
+        "race": "人类",
+        "identity": "调查员",
+        "story": "调查旧教堂。",
+        "appearance": {
+            "negative": "extra fingers",
+            "face": {"front": "silver hair, blue eyes", "back": "silver hair"},
+            "upperSfw": {"front": "black shirt", "back": "black shirt from behind"},
+            "fullSfw": {"front": "long legs", "back": ""},
+            "upperNsfw": {"front": "bare shoulders", "back": ""},
+            "fullNsfw": {"front": "", "back": ""},
+            "outfits": [
+                {
+                    "id": "gothic",
+                    "nameCN": "哥特礼服",
+                    "nameEN": "Gothic dress",
+                    "upper": {"front": "black corset", "back": "lace back"},
+                    "full": {"front": "gold-trimmed skirt", "back": ""},
+                    "photoPrompt": "full body",
+                }
+            ],
+            "activeOutfitId": "gothic",
+        },
+        "prompts": [{"id": "raw", "label": "raw", "text": "ignored raw duplicate"}],
+        "gallery": [
+            {"id": "remote", "url": "https://example.com/luna.png", "caption": "正面"},
+            {"id": "inline", "url": "data:image/png;base64,abc"},
+        ],
+        "timeline": [{"id": "e1", "date": "2026", "title": "抵达", "description": "来到夜城"}],
+        "relationships": [
+            {"id": "r1", "targetId": "char-noah", "type": "ally", "strength": 80, "note": "搭档"}
+        ],
+    }
+    seed = build_oc_creative_seed(
+        character,
+        prompts=[{"prompt_id": "saved", "label": "立绘", "text": "portrait prompt"}],
+        lore={"locations": [{"name": "旧教堂"}]},
+    )
+
+    assert seed["basic_character"] == "露娜, 女, 24 years old, 人类, 调查员"
+    assert seed["appearance"]["front"]["sfw"] == ("silver hair, blue eyes, black shirt, long legs")
+    assert seed["appearance"]["back"]["sfw"] == ("silver hair, black shirt from behind, long legs")
+    assert seed["appearance"]["front"]["nsfw"] == "silver hair, blue eyes, bare shoulders"
+    assert seed["appearance"]["has_sfw"] is True
+    assert seed["appearance"]["has_nsfw"] is True
+    assert seed["outfits"][0]["front"] == "black corset, gold-trimmed skirt"
+    assert seed["outfits"][0]["back"] == "lace back, gold-trimmed skirt"
+    assert seed["outfits"][0]["active"] is True
+    assert seed["prompts"] == [{"id": "saved", "label": "立绘", "text": "portrait prompt"}]
+    assert [image["id"] for image in seed["gallery"]] == ["remote"]
+    assert seed["relationships"][0]["target_id"] == "char-noah"
+    assert seed["timeline"][0]["title"] == "抵达"
+    assert seed["world_context"]["lore"]["locations"][0]["name"] == "旧教堂"
+
+
+def test_build_oc_creative_seed_falls_back_for_legacy_character() -> None:
+    seed = build_oc_creative_seed({"id": "legacy", "name": "旧角色", "age": "未知"})
+
+    assert seed["basic_character"] == "旧角色, 未知"
+    assert seed["appearance"]["front"]["sfw"] == ""
+    assert seed["appearance"]["has_sfw"] is False
+    assert seed["outfits"] == []
+    assert seed["world_context"] == {"world_name": "", "lore": {}}
 
 
 def test_archive_and_import_oc_manager_data(tmp_path) -> None:

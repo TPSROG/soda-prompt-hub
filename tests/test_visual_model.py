@@ -200,16 +200,18 @@ def test_download_cancel_keeps_partial_file_and_retry_resumes(tmp_path) -> None:
     assert 0 < saved < len(raw)
 
     resuming = _FakeOpener(raw, chunk=10)
+    resumed_context = _Context()
     result = download_bundled_visual_model(
         model_root,
         {},
-        _Context(),
+        resumed_context,
         expected_size=len(raw),
         expected_sha256=digest,
         opener=resuming,
     )
     assert result["installed"] is True
     assert resuming.requests[-1].get_header("Range") == f"bytes={saved}-"
+    assert all(total == len(raw) for _, total, _ in resumed_context.updates)
     assert (model_root / MODEL_FILENAME).read_bytes() == raw
     assert not part.exists()
 

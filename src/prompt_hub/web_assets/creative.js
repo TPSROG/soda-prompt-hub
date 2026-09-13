@@ -7,7 +7,7 @@
   };
   const safetyLabels = {sfw:'普通',suggestive:'轻度成人向',adult:'成人向','explicit-adult':'明确成人向',unrated:'尚未分级'};
   const wd14RatingLabels = {general:'普通',sensitive:'轻度成人向',questionable:'成人向',explicit:'明确成人向',unknown:'尚未判断'};
-  const creativeState = {taggerConfig: null, project: null, projects: [], recipes: [], outputs: {}, profile: 'anima', tagStatus: null, tagDownloading: false, workflowProfiles: [], windowsModels: [], windowsLoras: [], workflowLoraPickerOpen: false, workflowLoraQuery: '', workflowLoraFolder: '', workflowMessage: '', workflowMessageProjectId: '', datasetProfile: 'anima', datasetMessage: '', datasetMessageProjectId: '', journey: null, journeyProjectId: '', journeyRun: 0, suggestion: null, sourcing: null, sourcingProjectId: '', sourcingRun: 0, review: null, reviewAssetId: '', reviewProjectId: '', iteration: null, iterationProjectId: '', iterationRun: 0, iterationMessage: '', iterationMessageProjectId: '', visionAvailable: false, saveTimer: null, compileTimer: null, loadedMeta: false};
+  const creativeState = {taggerConfig: null, project: null, projects: [], recipes: [], outputs: {}, profile: 'anima', tagStatus: null, tagDownloading: false, workflowProfiles: [], windowsModels: [], windowsLoras: [], workflowLoraPickerOpen: false, workflowLoraQuery: '', workflowLoraFolder: '', workflowMessage: '', workflowMessageProjectId: '', datasetProfile: 'anima', datasetMessage: '', datasetMessageProjectId: '', journey: null, journeyProjectId: '', journeyRun: 0, suggestion: null, sourcing: null, sourcingProjectId: '', sourcingRun: 0, review: null, reviewAssetId: '', reviewProjectId: '', iteration: null, iterationProjectId: '', iterationRun: 0, iterationMessage: '', iterationMessageProjectId: '', ocSeed: null, visionAvailable: false, saveTimer: null, compileTimer: null, loadedMeta: false};
 
   async function creativeJson(url, options = {}) {
     const response = await fetch(url, options);
@@ -39,6 +39,24 @@
     if(runId!==creativeState.journeyRun||creativeState.project?.project_id!==projectId) return;
     creativeState.journey=journey; creativeState.journeyProjectId=projectId; renderProjectJourney();
   }
+
+  async function refreshImportedResults(projectId) {
+    if (!projectId) return;
+    const fresh=await creativeJson(`/api/creative/projects/${encodeURIComponent(projectId)}`);
+    const index=creativeState.projects.findIndex(project=>project.project_id===projectId);
+    if(index>=0) creativeState.projects[index]=fresh;
+    if(creativeState.project?.project_id!==projectId) return;
+    // Only merge results: never repaint or replace the user's unsaved prompt/controls.
+    const local=creativeState.project.generation?.result_assets || [];
+    const existing=new Map(local.map(asset=>[asset.asset_id,asset]));
+    creativeState.project.generation={...creativeState.project.generation,
+      result_assets:(fresh.generation?.result_assets || []).map(asset=>existing.get(asset.asset_id)||asset)};
+    creativeState.project.revision=Math.max(creativeState.project.revision||0,fresh.revision||0);
+    renderResultGallery(); await refreshProjectJourney();
+  }
+  window.addEventListener('prompt-hub-results-imported',event=>{
+    refreshImportedResults(event.detail?.project_id).catch(showCreativeError);
+  });
 
   async function syncProjectDataset() {
     if(!creativeState.project?.project_id) return;
@@ -385,6 +403,7 @@
   async function ensureCreativeProject() {
     if (!creativeState.loadedMeta) await loadCreativeMeta();
     if (!creativeState.project) creativeState.project = creativeState.projects[0] || await createCreativeProject();
+    await refreshImportedResults(creativeState.project.project_id);
     renderCreativeProject();
     checkTagCompletionStatus();
   }
@@ -687,6 +706,7 @@
 
   async function tagResultAsset(assetId) {
     const payload=wd14Payload(), label=payload.tagger==='model'?'模型':'WD14';
+    if (payload.tagger === 'wd14' && !(await window.ensureLocalTagger(creativeState.taggerConfig?.id))) return;
     await saveCreative(); const button = document.querySelector(`[data-wd14-tag="${CSS.escape(assetId)}"]`); if (button) { button.disabled = true; button.textContent = `${label} 打标中…`; }
     creativeState.datasetMessageProjectId = creativeState.project.project_id; creativeState.datasetMessage = payload.tagger==='model'?`正在使用 ${payload.model} 生成标签草稿…`:'正在本机使用 WD14 分析图片…'; $('#datasetExportStatus').textContent = creativeState.datasetMessage;
     try {
@@ -697,6 +717,7 @@
 
   async function tagSelectedDataset() {
     const payload=wd14Payload(), label=payload.tagger==='model'?'模型':'WD14';
+    if (payload.tagger === 'wd14' && !(await window.ensureLocalTagger(creativeState.taggerConfig?.id))) return;
     await saveCreative(); const button = $('#tagSelectedDataset'); button.disabled = true; button.textContent = '精选图片打标中…';
     creativeState.datasetMessageProjectId = creativeState.project.project_id; creativeState.datasetMessage = '正在逐张处理精选图片，请保持页面打开…'; $('#datasetExportStatus').textContent = creativeState.datasetMessage;
     try {
@@ -754,20 +775,148 @@
     renderCreativeProject();
   }
 
+  function closeOcSeed() {
+    creativeState.ocSeed = null;
+    $('#ocSeedModal').hidden = true;
+    document.body.style.overflow = '';
+  }
+
+  function selectedOcSeedValue(name, fallback) {
+    return document.querySelector(`input[name="${name}"]:checked`)?.value || fallback;
+  }
+
+  function selectedOcOutfit(seed) {
+    const outfitId = $('#ocSeedOutfit').value;
+    return (seed.outfits || []).find(outfit => outfit.id === outfitId) || null;
+  }
+
+  function updateOcSeedPreview() {
+    const seed = creativeState.ocSeed; if (!seed) return;
+    const view = selectedOcSeedValue('ocSeedView', 'front');
+    const rating = selectedOcSeedValue('ocSeedRating', 'sfw');
+    const parts = [];
+    if ($('#ocSeedAppearance').checked) parts.push(seed.appearance?.[view]?.[rating] || seed.basic_character || '');
+    const outfit = selectedOcOutfit(seed); if (outfit) parts.push(outfit[view] || outfit.front || '');
+    $('#ocSeedPreview').textContent = parts.filter(Boolean).join('\n\n') || '没有可用的分层外观。';
+  }
+
+  function renderOcSeed(seed) {
+    const hasAppearance = Boolean(seed.appearance?.has_sfw || seed.appearance?.has_nsfw);
+    $('#ocSeedSummary').textContent = `${seed.name} · ${seed.world || '未分世界'} · ${seed.outfits.length} 套服装 · ${seed.gallery.length} 张图库图片`;
+    $('#ocSeedAppearance').checked = hasAppearance;
+    $('#ocSeedAppearance').disabled = !hasAppearance;
+    $('#ocSeedNsfw').disabled = !seed.appearance?.has_nsfw;
+    document.querySelector('input[name="ocSeedRating"][value="sfw"]').checked = true;
+    document.querySelector('input[name="ocSeedView"][value="front"]').checked = true;
+    $('#ocSeedOutfit').innerHTML = '<option value="">不引用服装</option>' + seed.outfits.map(outfit => `<option value="${escapeHtml(outfit.id)}">${escapeHtml(outfit.label)}${outfit.name_en && outfit.name_en !== outfit.label ? ` / ${escapeHtml(outfit.name_en)}` : ''}</option>`).join('');
+    const preferredOutfit = seed.active_outfit_id || seed.outfits[0]?.id || '';
+    if ([...$('#ocSeedOutfit').options].some(option => option.value === preferredOutfit)) $('#ocSeedOutfit').value = preferredOutfit;
+    const toggles = [
+      ['ocSeedStory', Boolean(seed.story), Boolean(seed.story)],
+      ['ocSeedGallery', Boolean(seed.gallery.length), Boolean(seed.gallery.length)],
+      ['ocSeedWorld', false, Boolean(seed.world_context?.lore && Object.keys(seed.world_context.lore).length)],
+      ['ocSeedRelationships', false, Boolean(seed.relationships.length)],
+      ['ocSeedTimeline', false, Boolean(seed.timeline.length)],
+    ];
+    toggles.forEach(([id, checked, enabled]) => { const input = $('#' + id); input.checked = checked; input.disabled = !enabled; });
+    $('#ocSeedPromptList').innerHTML = seed.prompts.length ? seed.prompts.map(prompt => `<label class="oc-seed-prompt"><input type="checkbox" value="${escapeHtml(prompt.id)}"><span><strong>${escapeHtml(prompt.label)}</strong><small>${escapeHtml(prompt.text)}</small></span></label>`).join('') : '<p class="oc-seed-empty">这个角色还没有 Prompt 快照。</p>';
+    $('#ocSeedNote').textContent = '已锁定的槽位不会被覆盖；确认前不会修改当前项目。';
+    updateOcSeedPreview();
+    window.promptHubI18n?.translateTree($('#ocSeedModal'), {staticText:true});
+  }
+
   async function startFromCharacter(item) {
-    const detail = await creativeJson('/api/oc-manager/characters/' + encodeURIComponent(item.character_id)); await ensureCreativeProject();
-    const traits = [detail.name, detail.gender, detail.age ? `${detail.age} years old` : '', detail.race, detail.identity].filter(Boolean);
-    const project = collectCreative(); project.title = `${detail.name} · 绘图项目`; project.character_id = detail.character_id; project.slots.character = traits.join(', ');
-    if (detail.prompts?.length) project.slots.style = [project.slots.style, detail.prompts.map(p => p.text).join(', ')].filter(Boolean).join(', ');
-    const gallery = Array.isArray(detail.profile?.gallery) ? detail.profile.gallery : [];
-    project.references.push({key:`oc:${detail.character_id}`, slot:'character', source_id:'oc-manager', external_id:detail.character_id, title:detail.name, kind:'character', visuals:gallery.filter(v => v && (v.thumbnail_url || v.url)).map(v => ({thumbnail_url:v.thumbnail_url || v.url, original_url:v.original_url || v.url}))});
-    creativeState.project = project; renderCreativeProject(); await saveCreative(); await setView('creative');
+    const seed = await creativeJson('/api/oc-manager/characters/' + encodeURIComponent(item.character_id) + '/creative-seed');
+    creativeState.ocSeed = seed;
+    renderOcSeed(seed);
+    $('#ocSeedModal').hidden = false;
+    document.body.style.overflow = 'hidden';
+    queueMicrotask(() => $('.oc-seed-dialog').focus());
+  }
+
+  function replaceOcBlock(existing, label, characterId, content) {
+    const clean = String(existing || '').replace(/\n?\[OC Manager (?:创作上下文|引用记录) · [^\]]+\][\s\S]*?\[\/OC Manager (?:创作上下文|引用记录)\]\n?/g, '\n').trim();
+    if (!content.trim()) return clean;
+    const block = `[OC Manager ${label} · ${characterId}]\n${content.trim()}\n[/OC Manager ${label}]`;
+    return [clean, block].filter(Boolean).join('\n\n').slice(0, 6000);
+  }
+
+  function ocWorldText(seed) {
+    const lore = seed.world_context?.lore || {};
+    return JSON.stringify(lore, null, 2).slice(0, 2600);
+  }
+
+  function ocRelationshipText(seed) {
+    return (seed.relationships || []).map(item => `${item.type} → ${item.target_id || '未知角色'}${item.note ? `：${item.note}` : ''}`).join('\n');
+  }
+
+  function ocTimelineText(seed) {
+    return (seed.timeline || []).map(item => `${item.date ? `${item.date} · ` : ''}${item.title || '未命名事件'}${item.description ? `：${item.description}` : ''}`).join('\n');
+  }
+
+  function mergeSlotValue(current, incoming) {
+    const left = String(current || '').trim(), right = String(incoming || '').trim();
+    if (!right || left.toLowerCase().includes(right.toLowerCase())) return left;
+    return [left, right].filter(Boolean).join(', ');
+  }
+
+  async function applyOcSeed() {
+    const seed = creativeState.ocSeed; if (!seed) return;
+    const button = $('#applyOcSeed'); button.disabled = true; button.textContent = '正在准备创作项目…';
+    try {
+      await ensureCreativeProject();
+      const project = collectCreative();
+      const view = selectedOcSeedValue('ocSeedView', 'front');
+      const rating = selectedOcSeedValue('ocSeedRating', 'sfw');
+      const appearanceText = $('#ocSeedAppearance').checked ? seed.appearance?.[view]?.[rating] || '' : '';
+      const characterText = mergeSlotValue(seed.basic_character, appearanceText);
+      const outfit = selectedOcOutfit(seed);
+      const locked = [];
+      if (!project.slot_locks?.character) project.slots.character = characterText;
+      else locked.push('角色');
+      if (outfit) {
+        if (!project.slot_locks?.outfit) project.slots.outfit = outfit[view] || outfit.front || '';
+        else locked.push('服装');
+      }
+      if (!project.slot_locks?.composition) project.slots.composition = mergeSlotValue(project.slots.composition, view === 'back' ? 'from behind' : 'front view');
+      else locked.push('构图');
+      project.title = `${seed.name} · 绘图项目`;
+      project.character_id = seed.character_id;
+      project.safety_mode = rating === 'nsfw' ? 'adult' : 'sfw';
+
+      const context = [];
+      if ($('#ocSeedStory').checked && seed.story) context.push(`[角色背景]\n${seed.story}`);
+      if ($('#ocSeedWorld').checked) context.push(`[世界观 · ${seed.world || '未分世界'}]\n${ocWorldText(seed)}`);
+      if ($('#ocSeedRelationships').checked) context.push(`[角色关系]\n${ocRelationshipText(seed)}`);
+      if ($('#ocSeedTimeline').checked) context.push(`[角色时间线]\n${ocTimelineText(seed)}`);
+      project.brief_zh = replaceOcBlock(project.brief_zh, '创作上下文', seed.character_id, context.filter(Boolean).join('\n\n'));
+
+      const selectedPromptIds = new Set([...document.querySelectorAll('#ocSeedPromptList input:checked')].map(input => input.value));
+      const records = seed.prompts.filter(prompt => selectedPromptIds.has(prompt.id)).map(prompt => `[Prompt 快照 · ${prompt.label}]\n${prompt.text}`);
+      if ($('#ocSeedAppearance').checked && seed.appearance?.negative) records.push(`[角色外观负面词]\n${seed.appearance.negative}`);
+      project.test_notes = replaceOcBlock(project.test_notes, '引用记录', seed.character_id, records.join('\n\n'));
+
+      project.references = (project.references || []).filter(ref => !(ref.source_id === 'oc-manager' && ref.kind === 'character'));
+      if ($('#ocSeedGallery').checked && seed.gallery.length) project.references.push({key:`oc:${seed.character_id}`, slot:'character', source_id:'oc-manager', external_id:seed.character_id, title:seed.name, kind:'character', visuals:seed.gallery.map(image => ({thumbnail_url:image.thumbnail_url, original_url:image.original_url}))});
+      creativeState.project = project;
+      closeOcSeed();
+      renderCreativeProject();
+      await saveCreative();
+      await setView('creative');
+      $('#creativeSaveState').textContent = locked.length ? `已导入 OC；已保护锁定槽位：${[...new Set(locked)].join('、')}` : '已导入 OC 选择并保存';
+    } finally {
+      button.disabled = false; button.textContent = '确认并进入创作台';
+    }
   }
 
   function showCreativeError(error) { $('#creativeSaveState').textContent = `操作失败：${error.message}`; console.error(error); }
   function showResultReviewError(error) { $('#resultReviewStatus').textContent = `结果图操作失败：${error.message}`; $('#datasetExportStatus').textContent = `操作失败：${error.message}`; showCreativeError(error); }
 
   $('#creativeSlots').innerHTML = slotTemplate();
+  $('#ocSeedModal').addEventListener('change', updateOcSeedPreview);
+  $('#ocSeedModal').addEventListener('click', event => { if (event.target.closest('[data-oc-seed-close]')) closeOcSeed(); });
+  $('#applyOcSeed').addEventListener('click', () => applyOcSeed().catch(showCreativeError));
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && !$('#ocSeedModal').hidden) closeOcSeed(); });
   $('#refreshProjectJourney').addEventListener('click',()=>refreshProjectJourney().catch(showCreativeError));
   $('#projectJourneyGrid').addEventListener('click',event=>{ const button=event.target.closest('[data-journey-action]'); if(!button) return; const stage=button.dataset.journeyAction,view=button.dataset.journeyView,target=button.dataset.journeyTarget; if(stage==='dataset'&&!target) { syncProjectDataset().catch(showCreativeError); return; } window.setPromptHubView?.(view).then(()=>{ if(view==='datasets'&&target) return window.openDatasetWorkspace?.(target,stage==='delivery'?5:0); const targets={inspiration:'#creativeBrief',prompts:'.output-rail',generation:'.workflow-dispatch',results:'#creativeResultsSection'}; document.querySelector(targets[stage]||'.creative-editor')?.scrollIntoView({behavior:'smooth',block:'start'}); }).catch(showCreativeError); });
   $('#newCreativeProject').addEventListener('click', () => createCreativeProject().catch(showCreativeError));

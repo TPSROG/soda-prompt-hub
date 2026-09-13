@@ -5,7 +5,7 @@ import subprocess
 from collections.abc import Callable, Iterable, Mapping
 from typing import TYPE_CHECKING, Any, Protocol
 
-from prompt_hub.importers import SourceSpec, discover_sources, import_all
+from prompt_hub.importers import SourceSpec, discover_sources, import_report
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -35,7 +35,7 @@ class SourceSyncService:
         self.settings = settings
         self.database = database
         self._sources = list(sources) if sources is not None else None
-        self._reindexer = reindexer or (lambda: import_all(settings, database))
+        self._reindexer = reindexer
 
     def status(self) -> list[dict[str, Any]]:
         return [self._source_status(spec) for spec in self._configured_sources()]
@@ -64,16 +64,26 @@ class SourceSyncService:
             results.append(self._sync_one(spec, clone_missing=clone_missing))
             context.update(index, len(sources) + 1, f"已处理 {index}/{len(sources)} 个资料源")
         context.update(len(sources), len(sources) + 1, "重建本地资料索引")
-        counts = dict(self._reindexer())
-        context.update(len(sources) + 1, len(sources) + 1, "资料源与索引已更新")
+        report = (
+            {"sources": dict(self._reindexer()), "failed": [], "skipped": []}
+            if self._reindexer is not None
+            else import_report(self.settings, self.database)
+        )
+        context.update(len(sources) + 1, len(sources) + 1, "资料检查结束，请查看各来源结果")
         return {
             "sources": results,
             "updated": sum(item["status"] == "updated" for item in results),
             "unchanged": sum(item["status"] == "unchanged" for item in results),
             "cloned": sum(item["status"] == "cloned" for item in results),
-            "skipped": sum(str(item["status"]).startswith("skipped") for item in results),
+            "skipped": sum(
+                str(item["status"]).startswith("skipped") or item["status"] == "not_git"
+                for item in results
+            ),
+            "missing": sum(item["status"] == "missing" for item in results),
             "failed": sum(item["status"] == "failed" for item in results),
-            "entry_counts": counts,
+            "entry_counts": report["sources"],
+            "index_failed": report["failed"],
+            "index_skipped": report["skipped"],
         }
 
     def configured_source_ids(self) -> set[str]:
@@ -186,14 +196,20 @@ def _git(
     executable = shutil.which("git")
     if executable is None:
         raise SourceSyncError("找不到 Git 可执行文件")
-    result = subprocess.run(  # noqa: S603
-        [executable, *arguments],
-        cwd=path,
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-    )
+    try:
+        result = subprocess.run(  # noqa: S603
+            [executable, *arguments],
+            cwd=path,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except subprocess.TimeoutExpired as error:
+        operation = arguments[0] if arguments else "操作"
+        msg = f"Git {operation} 超时（{timeout:g} 秒），请检查网络后重试"
+        raise SourceSyncError(msg) from error
     if result.returncode and check:
         detail = (result.stderr or result.stdout).strip()[:600]
         raise SourceSyncError(detail or f"Git 命令失败：{' '.join(arguments)}")
@@ -203,7 +219,7 @@ def _git(
 def _progress_label(spec: SourceSpec, *, clone_missing: bool) -> str:
     if clone_missing and not spec.path.is_dir():
         return f"正在拉取 {spec.name}，首次下载可能需要几分钟"
-    return f"检查 {spec.name}"
+    return f"检查并更新 {spec.name}（Git 单步最长等待 {GIT_TIMEOUT_SECONDS:g} 秒）"
 
 
 def _result(

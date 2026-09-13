@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from prompt_hub.api import create_app
+from prompt_hub.background_jobs import JobCancelledError
 from prompt_hub.embedding_index import EmbeddingIndexStore
 from prompt_hub.local_visual import (
     MODEL_FILENAME,
@@ -113,10 +114,39 @@ class _Catalog:
     def __init__(self, assets):
         self.assets = assets
 
-    def discover(self, asset_types=None):
-        if not asset_types:
-            return self.assets
-        return [asset for asset in self.assets if asset.asset_type in asset_types]
+    def discover(self, asset_types=None, *, context=None, max_items=0):
+        del context
+        assets = [
+            asset for asset in self.assets if not asset_types or asset.asset_type in asset_types
+        ]
+        return assets[:max_items] if max_items else assets
+
+
+def test_cancel_keeps_valid_batches_skips_pruning_and_can_resume(tmp_path) -> None:
+    path = tmp_path / "red.png"
+    digest = _png(path, "red")
+    ghost = VisualAsset("old", "dataset_image", path, digest, {})
+    store = EmbeddingIndexStore(tmp_path / "index")
+    store.initialize()
+    catalog = _Catalog([ghost])
+    service = LocalVisualIndexService(store, catalog, _Encoder())
+    service.job({}, _Context())
+    catalog.assets = [VisualAsset(str(i), "dataset_image", path, digest, {}) for i in range(10)]
+
+    class CancelAfterBatch(_Context):
+        def update(self, current, total, message=""):
+            if current == 8 and message.startswith("已处理"):
+                raise JobCancelledError
+            super().update(current, total, message)
+
+    with pytest.raises(JobCancelledError):
+        service.job({}, CancelAfterBatch())
+    assert len(store.known_hashes(service.index_id)) == 9
+    assert "old" in store.known_hashes(service.index_id)
+    resumed = service.job({}, _Context())
+    assert resumed["indexed"] == 2
+    assert resumed["pruned"] == 1
+    assert len(store.known_hashes(service.index_id)) == 10
 
 
 def test_local_visual_index_is_incremental_resumable_and_queryable(tmp_path) -> None:

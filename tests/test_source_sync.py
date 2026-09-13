@@ -4,6 +4,7 @@ import shutil
 import subprocess
 from typing import TYPE_CHECKING
 
+from prompt_hub import source_sync
 from prompt_hub.database import PromptDatabase
 from prompt_hub.importers import SourceSpec
 from prompt_hub.source_sync import SourceSyncService
@@ -97,6 +98,7 @@ def test_missing_source_is_cloned_only_when_explicitly_requested(settings, tmp_p
 
     untouched = service.job({}, _Context())
     assert untouched["sources"][0]["status"] == "missing"
+    assert untouched["missing"] == 1
     assert not target.exists()
 
     cloned = service.job({"clone_missing": True}, _Context())
@@ -218,3 +220,37 @@ def test_source_sync_fast_forwards_and_skips_dirty_tree(settings, tmp_path) -> N
     assert skipped["sources"][0]["status"] == "skipped_dirty"
     assert (source / "prompts.txt").read_text(encoding="utf-8") == "local edit\n"
     assert len(reindexes) == 3
+
+
+def test_git_timeout_is_reported_as_source_failure(settings, monkeypatch) -> None:
+    monkeypatch.setattr(source_sync.shutil, "which", lambda _: "git")
+
+    def timeout(*_args, **_kwargs):
+        raise subprocess.TimeoutExpired(cmd="git fetch", timeout=120)
+
+    monkeypatch.setattr(source_sync.subprocess, "run", timeout)
+    target = settings.git_sources_root / "demo"
+    (target / ".git").mkdir(parents=True)
+    service = _service(settings, _spec("https://example.invalid/demo", target), [])
+    result = service.job({}, _Context())
+    assert result["failed"] == 1
+    assert "超时" in result["sources"][0]["message"]
+
+
+def test_default_reindex_failure_is_not_hidden(settings, monkeypatch) -> None:
+    spec = _spec("https://example.invalid/demo", settings.git_sources_root / "demo")
+    service = SourceSyncService(settings, PromptDatabase(settings.database_path), sources=[spec])
+    failure = {"source_id": "demo", "name": "Demo", "message": "invalid source data"}
+    monkeypatch.setattr(
+        source_sync,
+        "import_report",
+        lambda *_: {
+            "sources": {},
+            "failed": [failure],
+            "skipped": [],
+        },
+    )
+    result = service.job({}, _Context())
+    assert result["missing"] == 1
+    assert result["entry_counts"] == {}
+    assert result["index_failed"] == [failure]

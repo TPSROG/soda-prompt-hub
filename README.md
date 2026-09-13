@@ -1,18 +1,18 @@
 # Soda Prompt Hub
 
-Soda Prompt Hub 是一套本机优先的 AI 绘图创作与数据集整理工具。Mac 保存提示词、视觉参照、OC、
-创作项目、结果图、Caption、审核记录和冻结版本；Windows Worker 把经过确认的任务交给 Windows
-本机 ComfyUI，并把结果送回 Mac 校验。LoRA 正式训练仍在 Windows 的训练工具中完成。
+Soda Prompt Hub 是一套本机优先的 AI 绘图创作与数据集整理工具。Mac 或 Windows Desktop 都可以独立
+保存提示词、视觉参照、OC、创作项目、结果图、Caption、审核记录和冻结版本；Windows Worker 可以把
+经过确认的任务交给本机 ComfyUI，也可以与另一台设备配合。LoRA 正式训练仍在 Windows 的训练工具中完成。
 
 当前源码版本为 `1.1.0`，属于稳定版通道。升级说明和版本规则见[正式版本体系](docs/RELEASES.md)。
 
 ## 五分钟开始
 
-1. 从 GitHub Release 下载完整源码 ZIP 并解压。
-2. 打开 `deploy/mac`，双击 `首次安装-Soda-Prompt-Hub.command`。
-3. 安装完成后，双击 `$HOME/Applications/Soda Prompt Hub/启动-Prompt-Hub.command`。
-4. 浏览器打开 <http://127.0.0.1:8765/>。
-5. 首页提示缺少资料库时，确认来源和许可证后再安装。
+1. Mac 用户下载 DMG，把 `Soda Prompt Hub.app` 拖入 Applications；Windows 用户运行 Desktop Setup。
+2. 双击系统应用列表中的 `Soda Prompt Hub`，不需要预装 Python 或 `uv`。
+3. 启动台显示 Core 已就绪后，打开本机工作台。
+4. 首页提示缺少资料库时，确认来源和许可证后再安装。
+5. 需要 ComfyUI 自动执行时，再在 Windows 安装独立的 `Soda Compute Worker`。
 
 程序默认只监听本机 `127.0.0.1`。新用户的个人资料默认保存在：
 
@@ -22,6 +22,11 @@ $HOME/Documents/Soda Prompt Hub/prompt-library
 
 程序和个人资料彼此独立。重新安装或更新程序不会主动移动、删除提示词、图片、数据库或模型。
 
+便携启动器不会显示 Terminal。它会先显示品牌启动台，用真实步骤检查并启动 Core；就绪后打开工作台，
+随后收进菜单栏。菜单栏可以重新打开启动台、工作台、日志和数据目录。关闭启动台窗口不会停止 Core；
+需要维护或排错时，仍可使用程序目录里的 `.command` 工具。日志保存在
+`$HOME/Library/Logs/Soda Prompt Hub`。
+
 ## 它能做什么
 
 - 从灵感、OC 或参考图建立绘图项目，并输出 Anima tags 与 Krea 2 自然语言 Prompt。
@@ -30,6 +35,7 @@ $HOME/Documents/Soda Prompt Hub/prompt-library
 - 使用 LM Studio 或可选的 OpenAI-compatible 模型辅助整理；模型结果先作为建议或草稿。
 - 使用 WD14 生成 Anima 标签草稿，人工审核后冻结为带哈希的版本化数据集。
 - 通过 SMB + Windows Worker 运行 ComfyUI、回收图片，并同步 LoRA/底模名称、分类、来源和预览图。
+- 使用 `Soda Compute Worker.exe` 在 Windows 图形界面查看 GPU、bridge、ComfyUI 和当前任务，并从系统托盘启停 Worker。
 - 在 Mac 管理 Workflow Profile、底模、LoRA、尺寸、Steps、CFG、Sampler 和 Scheduler 的选择。
 
 ## Mac 与 Windows 的分工
@@ -52,9 +58,14 @@ macOS 钥匙串保存，Prompt Hub 不读取密码。更完整的文件关系见
 | 我现在要做什么 | 应该看哪里 |
 |---|---|
 | 第一次安装，先把页面打开 | [快速开始](docs/QUICK_START.md) |
+| 下载、安装、升级或卸载商业包 | [商业分发与安装说明](docs/COMMERCIAL_RELEASE.md) |
 | 从灵感到出图、复盘和数据集 | [核心工作流](docs/WORKFLOWS.md) |
 | 启动、停止、备份、恢复和安全更新 | [Mac 使用与维护](docs/MAC_GUIDE.md) |
 | 在 Windows 安装、自检和启动 Worker | [Windows Worker 完整指南](docs/WINDOWS_WORKER.md) |
+| 按需安装 WD14、真人打标和 CLIP | [可选本地模型](docs/OPTIONAL_MODELS.md) |
+| 构建 Windows Worker 图形启动器 | [Windows Shell 构建说明](deploy/windows-shell/README.md) |
+| 了解 Mac、Windows Worker 与 Windows 单机版的产品形态 | [Desktop 产品计划](docs/DESKTOP_PRODUCT_PLAN.md) |
+| 查看三端启动器的视觉与交互规格 | [Desktop UI 规格](docs/DESKTOP_UI_SPEC.md) |
 | 弄清两台设备和文件怎样关联 | [设备与文件关系](docs/ARCHITECTURE.md) |
 | 页面打不开、共享盘断开或任务不动 | [常见问题与排错](docs/TROUBLESHOOTING.md) |
 | 版本号、更新通道和发布检查 | [正式版本体系](docs/RELEASES.md) |

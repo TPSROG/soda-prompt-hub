@@ -526,6 +526,7 @@ def test_external_text_request_uses_real_model_name_and_secret(settings, monkeyp
 
     assert captured["url"] == "https://models.example.test/v1/chat/completions"
     assert captured["payload"]["model"] == "provider/real-model-name"
+    assert captured["payload"]["max_tokens"] == 4096
     assert captured["api_key"] == "secret-model-key"
     assert captured["allow_redirects"] is False
     assert captured["response_limit"] == 4 * 1024 * 1024

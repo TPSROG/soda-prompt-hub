@@ -18,7 +18,7 @@ CREATIVE_HTML = r"""
         <p class="lm-status" id="sourcingRailStatus">还没有查找参考</p>
       </section>
       <section class="rail-section">
-        <p class="section-label">让模型帮忙</p>
+        <p class="section-label">AI补全</p>
         <p class="lm-status" id="lmStatus">正在检查 LM Studio 和外部模型…</p>
         <select class="assist-select" id="lmModel"></select>
         <button class="rail-button" id="assistCreative" style="margin-top:7px">用所选模型补全空白项</button>
@@ -85,7 +85,7 @@ CREATIVE_HTML = r"""
           <div class="wd14-toolbar-intro"><strong>WD14 · 生成 Anima 标签草稿</strong><p>只处理已经选中的图片。自动结果需要人工检查，一次最多处理 24 张。</p></div>
           <label>打标模型<select id="wd14TaggerMode"><option value="wd14">WD14 本地模型</option><option value="model">使用模型</option></select></label>
           <label id="wd14TaggerModelWrap" hidden>用于打标的模型<select id="wd14TaggerModel"><option value="">正在读取视觉模型……</option></select></label>
-          <div class="wd14-thresholds" id="wd14Thresholds"><p class="result-review-status" id="wd14Calibration">正在读取打标模型校准值……</p></div>
+          <div class="wd14-thresholds" id="wd14Thresholds"><p class="result-review-status" id="wd14Calibration">正在读取打标模型校准值……</p><button type="button" class="optional-model-link" data-open-optional-models="wd-swinv2-tagger-v3">本地模型安装与状态 →</button></div>
           <button id="tagSelectedDataset" disabled>为已选图片生成标签草稿</button>
         </div>
         <p class="result-review-status" id="wd14TaggerHint">默认使用 WD14；也可以改用已连接的视觉模型生成 Booru 标签草稿。</p>
@@ -153,4 +153,32 @@ CREATIVE_HTML = r"""
     </aside>
   </div>
 </section>
+<div class="oc-seed-modal" id="ocSeedModal" hidden>
+    <button class="oc-seed-backdrop" type="button" data-oc-seed-close aria-label="关闭角色创作选择"></button>
+    <section class="oc-seed-dialog" role="dialog" aria-modal="true" aria-labelledby="ocSeedTitle" tabindex="-1">
+      <header class="oc-seed-head">
+        <div><span class="section-label">OC Manager · 创作接入</span><h2 id="ocSeedTitle">选择这次要引用的角色资料</h2></div>
+        <button type="button" data-oc-seed-close aria-label="关闭">×</button>
+      </header>
+      <p class="oc-seed-summary" id="ocSeedSummary">正在读取角色资料…</p>
+      <div class="oc-seed-grid">
+        <fieldset><legend>画面方向</legend><label class="oc-seed-radio"><input type="radio" name="ocSeedView" value="front" checked><span>正面</span></label><label class="oc-seed-radio"><input type="radio" name="ocSeedView" value="back"><span>背面</span></label></fieldset>
+        <fieldset><legend>内容层级</legend><label class="oc-seed-radio"><input type="radio" name="ocSeedRating" value="sfw" checked><span>SFW</span></label><label class="oc-seed-radio"><input id="ocSeedNsfw" type="radio" name="ocSeedRating" value="nsfw"><span>NSFW</span></label></fieldset>
+        <label class="oc-seed-toggle"><input id="ocSeedAppearance" type="checkbox" checked><span><strong>引用角色外观</strong><small>放入“角色”槽位；缺少分层外观时保留基本身份</small></span></label>
+        <label class="oc-seed-select"><span>服装预设</span><select id="ocSeedOutfit"><option value="">不引用服装</option></select></label>
+        <label class="oc-seed-toggle"><input id="ocSeedStory" type="checkbox"><span><strong>引用角色背景</strong><small>追加到创作想法，不写进画风</small></span></label>
+        <label class="oc-seed-toggle"><input id="ocSeedGallery" type="checkbox"><span><strong>引用角色图库</strong><small>作为远程视觉参考，不下载原图</small></span></label>
+        <label class="oc-seed-toggle"><input id="ocSeedWorld" type="checkbox"><span><strong>引用世界观</strong><small>把同世界 lore 追加到创作上下文</small></span></label>
+        <label class="oc-seed-toggle"><input id="ocSeedRelationships" type="checkbox"><span><strong>引用角色关系</strong><small>仅记录关系事实，不当作视觉标签</small></span></label>
+        <label class="oc-seed-toggle"><input id="ocSeedTimeline" type="checkbox"><span><strong>引用时间线</strong><small>把选角相关经历追加到创作上下文</small></span></label>
+      </div>
+      <section class="oc-seed-prompts">
+        <div><strong>Prompt 快照（可选）</strong><small>逐条选择；只写入 OC 引用记录，不自动归类为画风</small></div>
+        <div id="ocSeedPromptList"></div>
+      </section>
+      <section class="oc-seed-preview"><strong>将写入的外观与服装</strong><p id="ocSeedPreview">没有可用的分层外观。</p></section>
+      <p class="oc-seed-note" id="ocSeedNote">已锁定的槽位不会被覆盖。</p>
+      <footer class="oc-seed-actions"><button type="button" data-oc-seed-close>取消</button><button class="primary" id="applyOcSeed" type="button">确认并进入创作台</button></footer>
+    </section>
+  </div>
 """

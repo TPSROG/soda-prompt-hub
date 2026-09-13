@@ -95,6 +95,7 @@ class RemoteNodeStore(RemoteCatalogMixin):
             "role": role,
             "host": str(payload.get("host", "")).strip()[:255],
             "smb_mount": smb_mount[:4096],
+            "smb_share": str(payload.get("smb_share", "")).strip()[:255],
             "enabled": bool(payload.get("enabled", False)),
             "capabilities": sorted(
                 {

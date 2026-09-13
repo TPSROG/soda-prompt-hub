@@ -5,16 +5,16 @@ Windows Worker 是 Mac Prompt Hub 与 Windows 本机 ComfyUI 之间的任务执�
 
 ## 下载与首次配置
 
-1. 从 GitHub Release 下载 `Soda-Prompt-Hub-Windows-Worker-<版本>.zip`。
-2. 完整解压到一个固定目录，不要在 ZIP 内直接运行。
-3. 右键 `校验发行包.ps1`，选择“使用 PowerShell 运行”。看到绿色 `[OK]` 后继续。
-4. 双击 `0-首次配置.bat`。它会建立 `worker-config.json` 并用记事本打开。
-5. 修改 `bridge_root`、`lora_roots` 和 `model_roots` 为这台电脑的真实路径。
-6. 启动 ComfyUI，确认 <http://127.0.0.1:8188> 能打开。
-7. 双击 `1-先自检.bat`。
-8. 自检通过后双击 `2-启动Worker.bat`，并保持窗口开启。
+1. 从 GitHub Release 下载并运行 `Soda-Compute-Worker-<版本>-Setup.exe`。
+2. 当前安装器未签名；若 SmartScreen 拦截，先核对 Release 页面公布的 SHA-256，再选择继续运行。
+3. 从开始菜单打开 `Soda Compute Worker`。
+4. 启动 ComfyUI，确认 <http://127.0.0.1:8188> 能打开。
+5. 在“设置”中确认 bridge、ComfyUI、LoRA 和模型目录。
+6. 点“运行自检”，通过后点“启动 Worker”；窗口可收起到系统托盘，后台不显示命令窗口。
 
-建议使用 Python 3.12。Worker 只使用 Python 标准库，不需要额外安装 pip 包。
+安装器已经包含 Python 3.12 runtime，普通用户不需要安装 Python。只有维护包或图形界面无法启动时，
+才使用便携 ZIP 中的 `1-先自检.bat` 和 `2-启动Worker.bat`。图形包可先运行
+`校验桌面包.ps1`，完整检查 `.exe`、Desktop UI 和 Worker 文件。
 
 ## 四类路径
 
@@ -31,11 +31,16 @@ Windows 可共享 `D:\PromptHub-Bridge`；Mac Finder 挂载后可能是
 ## 每天启动
 
 ```text
-先开 ComfyUI → 再双击 2-启动Worker.bat → 最后从 Mac 投递
+先开 ComfyUI → 再打开 Soda Compute Worker 并启动 → 最后从 Mac 投递
 ```
 
-正常停止时在 Worker 窗口按 `Ctrl+C`。意外关机后，先恢复 ComfyUI，再启动 Worker；它会检查
-`processing` 中尚未结束的任务。单机锁会阻止同时启动两只 Worker。
+图形版从主界面或托盘正常停止；任务位于 `processing` 时会拒绝停止，防止丢失正在生成或回传的结果。
+维护脚本仍使用 `Ctrl+C`。意外关机后，先恢复 ComfyUI，再启动 Worker；它会检查 `processing` 中
+尚未结束的任务。单机锁会阻止同时启动两只 Worker。
+
+图形设置只在用户点击“保存并检查”时写入配置。已有 `worker-config.json` 会先备份为
+`worker-config.backup.json`，再通过同目录临时文件原子替换；未知的超时和身份字段会保留。高级用户仍可
+从设置面板打开 JSON。
 
 ## 版本与兼容性
 
@@ -51,14 +56,13 @@ Mac 设备页会分别显示“连接是否成功”和“Worker 版本是否合
 
 ## 安全升级 Worker
 
-1. 在旧 Worker 窗口按 `Ctrl+C`。
-2. 下载并解压新的 Worker ZIP 到新目录。
-3. 先运行 `校验发行包.ps1`。
-4. 把旧目录的真实 `worker-config.json` 复制到新目录；不要反向覆盖新版示例文件。
-5. 双击新版 `1-先自检.bat`。
-6. 自检通过后启动新版 Worker。
-7. 在 Mac“设备连接”重新检查，确认当前 Worker 版本和协议兼容。
-8. 新版稳定运行后再归档旧目录。
+1. 确认当前没有任务位于 `processing`，再从图形界面或托盘停止 Worker。
+2. 运行新版 `Soda-Compute-Worker-<版本>-Setup.exe` 覆盖安装。
+3. 启动新版 Worker 并运行自检；安装器会继续使用原来的用户配置和日志目录。
+4. 在 Prompt Hub“设备连接”重新检查，确认 Worker 版本和协议兼容。
+
+高级用户继续使用便携 ZIP 时，应解压到新目录、验证 manifest，再复制旧目录的真实
+`worker-config.json`；不要反向覆盖新版示例文件。
 
 发行 ZIP 不包含真实 `worker-config.json`、任务、模型、图片或登录信息。
 

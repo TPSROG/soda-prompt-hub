@@ -21,9 +21,12 @@ htmlcov/
 .DS_Store
 *.log
 *.tmp
+**/bin/
+**/obj/
 
 # Local development planning and audit notes
 .planning/
+docs/bugs/
 task_plan.md
 findings.md
 progress.md

@@ -4,6 +4,11 @@ import json
 from prompt_hub.comfy_web import COMFY_HTML, COMFY_SCRIPT, COMFY_STYLES
 from prompt_hub.creative_web import CREATIVE_HTML, CREATIVE_SCRIPT, CREATIVE_STYLES
 from prompt_hub.lora_web import LORA_HTML, LORA_SCRIPT, LORA_STYLES
+from prompt_hub.optional_models_web import (
+    OPTIONAL_MODELS_HTML,
+    OPTIONAL_MODELS_SCRIPT,
+    OPTIONAL_MODELS_STYLES,
+)
 from prompt_hub.remote_web import REMOTE_HTML, REMOTE_SCRIPT, REMOTE_STYLES
 from prompt_hub.search_web import SEARCH_HTML, SEARCH_SCRIPT, SEARCH_STYLES
 from prompt_hub.source_center_web import (
@@ -39,7 +44,7 @@ INDEX_HTML = INDEX_HTML.replace(
 )
 INDEX_HTML = INDEX_HTML.replace(
     "</body>",
-    f"{CREATIVE_SCRIPT}{SEARCH_SCRIPT}{WORKSPACE_SCRIPT}{LORA_SCRIPT}{COMFY_SCRIPT}{REMOTE_SCRIPT}{SOURCE_CENTER_SCRIPT}</body>",
+    f"{OPTIONAL_MODELS_STYLES}{OPTIONAL_MODELS_HTML}{CREATIVE_SCRIPT}{SEARCH_SCRIPT}{WORKSPACE_SCRIPT}{LORA_SCRIPT}{COMFY_SCRIPT}{REMOTE_SCRIPT}{SOURCE_CENTER_SCRIPT}{OPTIONAL_MODELS_SCRIPT}</body>",
     1,
 )
 

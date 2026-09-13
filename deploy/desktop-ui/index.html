@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <link rel="icon" href="data:,">
+  <title>Soda Prompt Hub</title>
+  <link rel="stylesheet" href="desktop.css?v=desktop-shell-9">
+  <script src="desktop.js?v=desktop-shell-8" defer></script>
+</head>
+<body data-phase="checking" data-product="mac">
+  <main class="desktop-shell" aria-live="polite">
+    <header class="title-bar" data-drag-region>
+      <span class="title-copy" id="titleCopy">Soda Prompt Hub</span>
+      <span class="platform-copy" id="platformCopy">MAC DESKTOP / 01</span>
+    </header>
+
+    <div class="workspace-grid">
+      <section class="workspace-intro">
+        <div class="brand-row">
+          <div class="brand-lockup" aria-label="Soda Prompt Hub">
+            <span class="brand-stamp" aria-hidden="true"></span>
+            <span class="brand-name" id="brandName">SODA /<br>PROMPT HUB</span>
+          </div>
+          <span class="build-label" id="buildLabel">LOCAL FIRST</span>
+        </div>
+
+        <div class="hero-copy">
+          <p class="eyebrow" id="phaseEyebrow">SYSTEM CHECK</p>
+          <h1 id="heroTitle">Your local<br>creative archive.</h1>
+          <p class="hero-description" id="heroDescription">本地创作资料中枢。资料、角色、Prompt 与结果都在这台设备上，由你掌控。</p>
+        </div>
+
+        <button class="primary-action" id="primaryAction" type="button" data-command="openWorkspace" disabled>
+          <span id="primaryLabel">正在准备</span>
+          <span aria-hidden="true">→</span>
+        </button>
+
+        <nav class="secondary-actions" aria-label="启动器操作">
+          <button type="button" data-command="restartCore" id="restartAction">重新启动</button>
+          <button type="button" data-command="openLogs" id="logsAction">查看日志</button>
+          <button type="button" data-command="exportDiagnostics" class="windows-only" id="diagnosticsAction" hidden>导出诊断</button>
+          <button type="button" data-command="openDataFolder" id="folderAction">数据目录</button>
+          <button type="button" data-command="toggleLocalWorker" class="desktop-only" id="computeAction" hidden>启动本机计算</button>
+          <button type="button" data-settings-open class="compute-settings" id="configAction" hidden>设置</button>
+          <button type="button" id="setupGuideAction">首次使用引导</button>
+          <button type="button" data-command="hideWindow" id="hideAction">收起窗口</button>
+          <button type="button" data-command="stopServiceAndQuit" id="stopQuitAction" class="mac-only" hidden>退出并停止服务</button>
+        </nav>
+      </section>
+
+      <aside class="system-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">LIVE SIGNAL</p>
+            <h2 id="panelTitle">System check</h2>
+          </div>
+          <time id="checkedAt">--:--:--</time>
+        </div>
+
+        <div class="status-list">
+          <article class="status-row" data-signal="core">
+            <span class="status-mark" aria-hidden="true"></span>
+            <div>
+              <h3>Core service</h3>
+              <p id="coreDetail">正在确认服务身份</p>
+            </div>
+            <strong id="coreState">CHECKING</strong>
+          </article>
+          <article class="status-row" data-signal="library">
+            <span class="status-mark" aria-hidden="true"></span>
+            <div>
+              <h3>Local library</h3>
+              <p id="libraryDetail">Documents / Soda Prompt Hub</p>
+            </div>
+            <strong id="libraryState">LOCAL</strong>
+          </article>
+          <article class="status-row" data-signal="compute">
+            <span class="status-mark" aria-hidden="true"></span>
+            <div>
+              <h3>Compute device</h3>
+              <p id="computeDetail">可以稍后连接 Windows</p>
+            </div>
+            <strong id="computeState">OPTIONAL</strong>
+          </article>
+          <article class="status-row worker-only" data-signal="comfy" hidden>
+            <span class="status-mark" aria-hidden="true"></span>
+            <div>
+              <h3 id="comfyTitle">ComfyUI</h3>
+              <p id="comfyDetail">127.0.0.1:8188</p>
+            </div>
+            <strong id="comfyState">CHECKING</strong>
+          </article>
+        </div>
+
+        <section class="task-lane worker-only" id="taskLane" hidden>
+          <div class="task-lane-heading">
+            <p class="eyebrow">TASK LANE</p>
+            <strong id="taskState">WAITING</strong>
+          </div>
+          <span class="task-track" aria-hidden="true"><i></i></span>
+          <h3 id="taskTitle">等待下一个已校验任务</h3>
+          <p id="taskDetail">Worker 只会领取 bridge 中通过协议校验的任务。</p>
+        </section>
+
+        <section class="connection-card" id="connectionCard" hidden aria-label="设备连接状态">
+          <div class="connection-heading"><span id="connectionDevice">计算设备</span><span id="connectionDot" aria-hidden="true">●</span></div>
+          <h3 id="connectionLabel">正在检查设备连接</h3>
+          <p id="connectionDetail">正在读取共享目录与 Worker 心跳。</p>
+          <div class="connection-actions">
+            <button type="button" data-command="checkConnection">重新检查</button>
+            <button type="button" data-command="reconnectDevice" id="reconnectAction" hidden>连接 Windows</button>
+            <button type="button" data-command="openDeviceSettings">设备设置 →</button>
+          </div>
+          <small>每 5 秒自动检查 · <span id="connectionCheckedAt">--:--:--</span></small>
+          <p class="connection-notice" id="connectionNotice" role="status" hidden></p>
+        </section>
+
+        <section class="step-card" id="stepCard">
+          <span class="step-index" id="stepIndex">01</span>
+          <div>
+            <p class="eyebrow" id="stepKicker">STARTUP SEQUENCE</p>
+            <h3 id="stepTitle">正在定位安装目录</h3>
+            <p id="stepDetail">启动器正在确认本机环境，请稍候。</p>
+          </div>
+        </section>
+
+        <section class="error-card" id="errorCard" hidden>
+          <p class="eyebrow">NEEDS ATTENTION</p>
+          <h3 id="errorTitle">启动未完成</h3>
+          <p id="errorDetail">请查看日志后重试。</p>
+          <button type="button" data-command="retryCore">重试启动</button>
+        </section>
+
+        <div class="program-card">
+          <span>PROGRAM</span>
+          <strong id="programVersion">Soda Prompt Hub</strong>
+          <small id="programDetail">Stable · Local first</small>
+        </div>
+      </aside>
+    </div>
+
+    <footer class="status-rail">
+      <span id="railCopy">CHECKING · LOCAL SERVICES</span>
+      <span class="rail-track" aria-hidden="true"><i></i></span>
+    </footer>
+
+    <div class="toast" id="toast" role="status" hidden></div>
+
+    <dialog id="setupGuide" class="setup-guide" aria-labelledby="setupGuideTitle">
+      <header><div><p class="eyebrow">GET STARTED / 首次使用</p><h2 id="setupGuideTitle">准备你的计算设备</h2></div><button type="button" id="setupGuideClose" aria-label="关闭首次使用引导">×</button></header>
+      <ol class="setup-track" aria-label="设置进度"><li>01 本机设置</li><li id="setupShareTab">02 共享连接</li><li>03 检查状态</li></ol>
+      <section data-setup-step="0"><h3 tabindex="-1">先连接本机 ComfyUI</h3><p>启动你的 ComfyUI，确认浏览器可以打开它。默认地址是 http://127.0.0.1:8188；使用其他端口时，在设置里修改。</p><p id="setupBridgeHelp">选择专用任务目录，例如 D:\PromptHub-Bridge\prompt-hub。只共享它的上级文件夹，不要共享整个磁盘、模型目录或个人资料。</p><p>LoRA 与模型目录可以稍后添加。已有配置会保留，只有点击保存才会更新。</p><button type="button" id="setupEdit">打开本机设置</button><button type="button" id="setupNext">已准备好，继续 →</button></section>
+      <section data-setup-step="1" hidden><h3 tabindex="-1">仅共享指定的任务文件夹</h3><p id="setupShareFolder"></p><p id="setupShareDetail"></p><ol class="setup-instructions"><li>打开下方文件夹，返回上一级，右键该文件夹 → 属性 → 共享 → 高级共享。</li><li>勾选共享，记下共享名称；在共享权限与「安全」页仅给用于连接的账号读取与写入权限。</li><li>保留密码保护共享。只在可信的专用网络启用文件共享；不要关闭防火墙或为 Everyone 开放整个磁盘。</li></ol><button type="button" id="setupOpenFolder">打开待共享文件夹</button><button type="button" id="setupReadShare">我已设置，重新检测</button><label class="setup-address">发给 Mac 的连接地址<input id="setupAddress" readonly aria-label="发给 Mac 的连接地址" placeholder="检测到共享后显示"></label><button type="button" id="setupCopy" disabled>复制连接地址</button><p>在 Mac 工作台的「设备连接 → 开始配对引导」粘贴地址。系统登录使用 Windows 账号密码，不是 PIN。</p><button type="button" id="setupToCheck">继续检查本机状态 →</button></section>
+      <section data-setup-step="2" hidden><h3 tabindex="-1">确认服务真正就绪</h3><ul id="setupChecks" class="setup-checks"></ul><p id="setupCheckHelp"></p><button type="button" id="setupCheck">重新检查</button><button type="button" id="setupFinish">返回主界面</button></section>
+      <footer><button type="button" id="setupBack" hidden>← 上一步</button><p id="setupNotice" role="status">引导不会自动修改共享、账号或防火墙。</p></footer>
+    </dialog>
+
+    <section class="settings-overlay compute-settings" id="settingsOverlay" aria-labelledby="settingsTitle" hidden>
+      <div class="settings-sheet">
+        <header>
+          <div>
+            <p class="eyebrow">DEVICE CONFIGURATION</p>
+            <h2 id="settingsTitle">配置计算设备</h2>
+          </div>
+          <button type="button" class="settings-close" data-settings-close aria-label="关闭设置">×</button>
+        </header>
+
+        <form id="workerSettingsForm">
+          <section class="settings-section">
+            <span class="settings-index">01</span>
+            <div class="settings-fields">
+              <h3>ComfyUI</h3>
+              <label for="bridgeRoot" class="bridge-config">Bridge 目录</label>
+              <div class="path-field bridge-config">
+                <input id="bridgeRoot" name="bridgeRoot" autocomplete="off" required>
+                <button type="button" data-folder-for="bridgeRoot">选择</button>
+              </div>
+              <label for="comfyUiUrl">ComfyUI 本机地址</label>
+              <input id="comfyUiUrl" name="comfyUiUrl" value="http://127.0.0.1:8188" autocomplete="off" required>
+            </div>
+          </section>
+
+          <section class="settings-section">
+            <span class="settings-index">02</span>
+            <div class="settings-fields">
+              <h3>LoRA roots</h3>
+              <label for="loraRoots">每行一个允许扫描的 LoRA 目录</label>
+              <div class="path-field path-field-multiline">
+                <textarea id="loraRoots" name="loraRoots" rows="2"></textarea>
+                <button type="button" data-folder-for="loraRoots">添加</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-section models-section">
+            <span class="settings-index">03</span>
+            <div class="settings-fields model-fields">
+              <h3>Model roots</h3>
+              <p>没有使用的类型可以留空；已有同类型的多个目录会按行保留。</p>
+              <div class="model-grid">
+                <label>Checkpoint<textarea id="modelCheckpoint" rows="1"></textarea><button type="button" data-folder-for="modelCheckpoint">选择</button></label>
+                <label>Diffusion model<textarea id="modelDiffusion" rows="1"></textarea><button type="button" data-folder-for="modelDiffusion">选择</button></label>
+                <label>VAE<textarea id="modelVae" rows="1"></textarea><button type="button" data-folder-for="modelVae">选择</button></label>
+                <label>Text encoder<textarea id="modelTextEncoder" rows="1"></textarea><button type="button" data-folder-for="modelTextEncoder">选择</button></label>
+                <label>Upscaler<textarea id="modelUpscaler" rows="1"></textarea><button type="button" data-folder-for="modelUpscaler">选择</button></label>
+                <label>ControlNet<textarea id="modelControlnet" rows="1"></textarea><button type="button" data-folder-for="modelControlnet">选择</button></label>
+              </div>
+            </div>
+          </section>
+
+          <footer class="settings-actions">
+            <button type="button" data-command="openConfig">高级 JSON</button>
+            <span id="settingsNotice">保存前不会修改现有配置。</span>
+            <button type="submit" class="settings-save">保存并检查</button>
+          </footer>
+        </form>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

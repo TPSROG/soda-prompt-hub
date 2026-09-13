@@ -14,13 +14,14 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections import Counter
-from contextlib import AbstractContextManager, suppress
+from contextlib import AbstractContextManager, redirect_stderr, redirect_stdout, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
 from pathlib import Path, PurePosixPath
-from typing import Any, BinaryIO, Self
+from threading import Event, Thread
+from typing import Any, BinaryIO, Self, TextIO
 from uuid import uuid4
 
 WORKER_BUILD_SHA256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
@@ -1094,12 +1095,50 @@ class WindowsWorker:
 
     def run_forever(self) -> None:
         self.initialize()
-        self.recover_processing()
-        print(f"[{_now()}] worker 已启动；等待任务。按 Ctrl+C 停止。", flush=True)
-        while True:
-            worked = self.run_once()
-            if not worked:
-                time.sleep(self.config.poll_interval_seconds)
+        stop = Event()
+        heartbeat = Thread(target=self._heartbeat_loop, args=(stop,), daemon=True)
+        heartbeat.start()
+        try:
+            self.recover_processing()
+            print(f"[{_now()}] worker 已启动；等待任务。按 Ctrl+C 停止。", flush=True)
+            while True:
+                worked = self.run_once()
+                if not worked:
+                    time.sleep(self.config.poll_interval_seconds)
+        finally:
+            stop.set()
+            heartbeat.join(timeout=5)
+            if not heartbeat.is_alive():
+                self.write_heartbeat(running=False)
+
+    def write_heartbeat(self, *, running: bool = True) -> None:
+        reachable = False
+        if running:
+            try:
+                ComfyUIClient(self.config.comfyui_url, timeout=3).system_stats()
+                reachable = True
+            except WorkerError:
+                pass
+        payload = {
+            "format": "soda-worker-heartbeat-v1",
+            "running": running,
+            "checked_at": _now(),
+            "worker_id": self.config.worker_id,
+            "worker_version": WORKER_VERSION,
+            "release_channel": WORKER_RELEASE["release_channel"],
+            "protocol_version": COMPUTE_PROTOCOL_VERSION,
+            "role": self.config.role,
+            "hostname": socket.gethostname(),
+            "comfyui_reachable": reachable,
+        }
+        with suppress(OSError):
+            _write_json(self.config.bridge_root / "worker-heartbeat.json", payload)
+
+    def _heartbeat_loop(self, stop: Event) -> None:
+        while not stop.is_set():
+            self.write_heartbeat()
+            if stop.wait(5):
+                break
 
     def run_once(self) -> bool:
         self.initialize()
@@ -1573,11 +1612,28 @@ def build_parser() -> argparse.ArgumentParser:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--self-test", action="store_true")
     mode.add_argument("--once", action="store_true")
+    parser.add_argument("--log-file", help="append stdout and stderr to this UTF-8 log")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.log_file:
+        try:
+            log_path = Path(args.log_file).resolve()
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with log_path.open("a", encoding="utf-8", buffering=1) as log:
+                return _run(args, log)
+        except OSError as error:
+            print(f"worker 日志无法打开：{error}", file=sys.stderr, flush=True)
+            return 2
+    return _run(args)
+
+
+def _run(args: argparse.Namespace, log: TextIO | None = None) -> int:
+    if log is not None:
+        with redirect_stdout(log), redirect_stderr(log):
+            return _run(args)
     try:
         config = WorkerConfig.load(Path(args.config).resolve())
         worker = WindowsWorker(config)

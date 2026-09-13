@@ -113,13 +113,18 @@ __PROMPT_HUB_BASE_STYLES__  </style>
             </div>
             <div class="personal-summary">我的收藏 <strong id="favoriteCount">0</strong> 条 <span class="divider">·</span> 已导入角色 <strong id="ocCount">0</strong> 个</div>
           </div>
-          <div class="sync-actions"><button class="sync-button" id="sourceSyncButton">↻ 更新公共提示词库</button><button class="sync-button" id="importButton">仅重建本地索引</button></div>
+          <div class="sync-actions"><button class="sync-button" id="sourceSyncButton">↻ 更新公共提示词库</button><button class="sync-button" id="importButton" aria-describedby="sourceIndexHelp">仅重建本地索引</button></div>
         </section>
       </header>
       <section class="management-sources">
         <p class="section-label">已经可以检索的来源</p>
         <div class="source-list" id="sourceList"></div>
-        <div class="source-sync-message" id="sourceSyncMessage">正在读取本地资料源状态…</div>
+        <p class="source-sync-help" id="sourceIndexHelp">更新公共提示词库：联网检查已安装的资料库，有新版本才下载；未安装的资料库请单独“拉取”。仅重建本地索引：重新读取已下载的资料并更新搜索条目和部分缩略图，不联网、不调用 AI，不修改原资料文件。</p>
+        <div class="source-sync-summary"><p id="sourceSyncSummary">正在读取本地资料源状态…</p><button class="source-sync-fetch" id="sourceSyncRefresh" type="button">刷新状态</button></div>
+        <div class="source-sync-message" id="sourceSyncMessage" role="status" aria-live="polite">尚未检查上游更新。</div>
+        <progress class="source-sync-progress" id="sourceSyncProgress" aria-label="资料更新步骤进度" value="0" max="1" hidden></progress>
+        <button class="source-sync-fetch" id="sourceSyncResume" type="button" hidden>重新连接任务进度</button>
+        <div class="source-sync-details" id="sourceSyncDetails"></div>
         <div class="source-sync-list" id="sourceSyncList"></div>
       </section>
     </section>

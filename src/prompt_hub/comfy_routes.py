@@ -11,6 +11,7 @@ from prompt_hub.creative import next_iteration_values
 from prompt_hub.result_media import ResultImageError, store_result_image
 
 if TYPE_CHECKING:
+    from prompt_hub.background_jobs import BackgroundJobRunner, BackgroundJobStore
     from prompt_hub.config import Settings
     from prompt_hub.creative import CreativeStore
 
@@ -28,8 +29,19 @@ def create_comfy_router(
     settings: Settings,
     store: ComfyResultStore,
     creative_store: CreativeStore,
+    job_store: BackgroundJobStore,
+    job_runner: BackgroundJobRunner,
 ) -> APIRouter:
     router = APIRouter()
+
+    @router.get("/api/comfy-results/scan-jobs/latest")
+    def latest_scan_job() -> dict[str, Any] | None:
+        jobs = job_store.list_jobs(job_type="comfy_scan", limit=1)
+        return jobs[0] if jobs else None
+
+    @router.post("/api/comfy-results/scan-jobs", status_code=status.HTTP_202_ACCEPTED)
+    def start_scan_job(payload: ComfyDirectoryInput) -> dict[str, Any]:
+        return job_runner.submit("comfy_scan", payload.model_dump(), exclusive=True)
 
     @router.get("/api/comfy-results")
     def list_comfy_results(

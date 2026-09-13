@@ -13,6 +13,7 @@ import urllib.request
 from collections import Counter
 from contextlib import AbstractContextManager, suppress
 from pathlib import Path
+from threading import Event, Thread
 from typing import Any, BinaryIO, Self
 from uuid import uuid4
 
@@ -225,12 +226,50 @@ class WindowsWorker:
 
     def run_forever(self) -> None:
         self.initialize()
-        self.recover_processing()
-        print(f"[{_now()}] worker 已启动；等待任务。按 Ctrl+C 停止。", flush=True)
-        while True:
-            worked = self.run_once()
-            if not worked:
-                time.sleep(self.config.poll_interval_seconds)
+        stop = Event()
+        heartbeat = Thread(target=self._heartbeat_loop, args=(stop,), daemon=True)
+        heartbeat.start()
+        try:
+            self.recover_processing()
+            print(f"[{_now()}] worker 已启动；等待任务。按 Ctrl+C 停止。", flush=True)
+            while True:
+                worked = self.run_once()
+                if not worked:
+                    time.sleep(self.config.poll_interval_seconds)
+        finally:
+            stop.set()
+            heartbeat.join(timeout=5)
+            if not heartbeat.is_alive():
+                self.write_heartbeat(running=False)
+
+    def write_heartbeat(self, *, running: bool = True) -> None:
+        reachable = False
+        if running:
+            try:
+                ComfyUIClient(self.config.comfyui_url, timeout=3).system_stats()
+                reachable = True
+            except WorkerError:
+                pass
+        payload = {
+            "format": "soda-worker-heartbeat-v1",
+            "running": running,
+            "checked_at": _now(),
+            "worker_id": self.config.worker_id,
+            "worker_version": WORKER_VERSION,
+            "release_channel": WORKER_RELEASE["release_channel"],
+            "protocol_version": COMPUTE_PROTOCOL_VERSION,
+            "role": self.config.role,
+            "hostname": socket.gethostname(),
+            "comfyui_reachable": reachable,
+        }
+        with suppress(OSError):
+            _write_json(self.config.bridge_root / "worker-heartbeat.json", payload)
+
+    def _heartbeat_loop(self, stop: Event) -> None:
+        while not stop.is_set():
+            self.write_heartbeat()
+            if stop.wait(5):
+                break
 
     def run_once(self) -> bool:
         self.initialize()

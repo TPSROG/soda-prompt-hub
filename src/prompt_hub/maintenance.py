@@ -319,20 +319,29 @@ def _git_source_revisions(git_root: Path) -> list[dict[str, str]]:
     revisions = []
     if not git_root.is_dir():
         return revisions
+    executable = shutil.which("git")
     for repository in sorted(path for path in git_root.iterdir() if path.is_dir()):
-        result = subprocess.run(  # noqa: S603
-            ["/usr/bin/git", "-C", str(repository), "rev-parse", "HEAD"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        revisions.append(
-            {
-                "name": repository.name,
-                "revision": result.stdout.strip() if result.returncode == 0 else "unavailable",
-            }
-        )
+        entry = {"name": repository.name, "revision": "unavailable"}
+        if executable is None:
+            entry["warning"] = "未找到 Git；个人数据已备份，未记录公共资料库 revision"
+        else:
+            try:
+                result = subprocess.run(  # noqa: S603
+                    [executable, "-C", str(repository), "rev-parse", "HEAD"],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                entry["warning"] = "Git 无法运行或超时；个人数据已备份，revision 未记录"
+            else:
+                if result.returncode == 0:
+                    entry["revision"] = result.stdout.strip()
+                else:
+                    entry["warning"] = "无法读取 Git revision；个人数据已备份"
+        revisions.append(entry)
     return revisions
 
 

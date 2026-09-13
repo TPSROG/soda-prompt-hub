@@ -82,10 +82,21 @@ class BackgroundJobStore:
         payload: Mapping[str, Any],
         *,
         max_attempts: int = 1,
+        exclusive: bool = False,
     ) -> dict[str, Any]:
         job_id = f"job-{uuid4().hex}"
         now = _now()
         with self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if exclusive:
+                existing = connection.execute(
+                    "SELECT * FROM background_jobs WHERE job_type = ? "
+                    "AND status IN ('queued', 'running') ORDER BY created_at LIMIT 1",
+                    (job_type,),
+                ).fetchone()
+                if existing is not None:
+                    connection.commit()
+                    return _job_from_row(existing)
             connection.execute(
                 """
                 INSERT INTO background_jobs (
@@ -109,13 +120,22 @@ class BackgroundJobStore:
             ).fetchone()
         return _job_from_row(row) if row is not None else None
 
-    def list_jobs(self, *, status: str = "", limit: int = 50) -> list[dict[str, Any]]:
-        query = "SELECT * FROM background_jobs"
+    def list_jobs(
+        self,
+        *,
+        status: str = "",
+        limit: int = 50,
+        job_type: str = "",
+    ) -> list[dict[str, Any]]:
+        query = "SELECT * FROM background_jobs WHERE 1 = 1"
         values: list[Any] = []
         if status:
-            query += " WHERE status = ?"
+            query += " AND status = ?"
             values.append(status)
-        query += " ORDER BY created_at DESC LIMIT ?"
+        if job_type:
+            query += " AND job_type = ?"
+            values.append(job_type)
+        query += " ORDER BY created_at DESC, rowid DESC LIMIT ?"
         values.append(limit)
         with self.connect() as connection:
             rows = connection.execute(query, values).fetchall()
@@ -358,11 +378,12 @@ class BackgroundJobRunner:
         payload: Mapping[str, Any],
         *,
         max_attempts: int = 1,
+        exclusive: bool = False,
     ) -> dict[str, Any]:
         if job_type not in self.handlers:
             msg = f"Unsupported background job type: {job_type}"
             raise ValueError(msg)
-        job = self.store.enqueue(job_type, payload, max_attempts=max_attempts)
+        job = self.store.enqueue(job_type, payload, max_attempts=max_attempts, exclusive=exclusive)
         self._wake_event.set()
         return job
 

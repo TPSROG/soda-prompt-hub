@@ -156,21 +156,21 @@ def download_bundled_visual_model(
             )
             if status not in accepted:
                 raise VisualModelError(f"模型下载失败：HTTP {status}")
-            headers = dict(getattr(response, "headers", {}) or {})
-            content_length = headers.get("Content-Length", headers.get("content-length", ""))
             if status == HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE:
                 return _finalize_download(part, target, model_root, expected_size, expected_sha256)
             if status == HTTPStatus.OK:
                 offset = 0
                 part.unlink(missing_ok=True)
             mode = "ab" if offset else "wb"
-            expected_total = int(content_length) if str(content_length).isdigit() else expected_size
+            expected_total = expected_size
             with part.open(mode) as sink:
                 while True:
                     context.raise_if_cancelled()
                     chunk = response.read(DOWNLOAD_CHUNK_BYTES)
                     if not chunk:
                         break
+                    if offset + len(chunk) > expected_size:
+                        raise VisualModelError("模型下载内容超过预期大小，已停止")
                     sink.write(chunk)
                     offset += len(chunk)
                     context.update(offset, expected_total, _progress_message(offset, expected_size))

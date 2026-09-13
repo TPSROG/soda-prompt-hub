@@ -64,7 +64,7 @@ release_version="$(sed -n 's/.*"product_version"[[:space:]]*:[[:space:]]*"\([^"]
 if [[ -z "$project_version" || "$project_version" != "$release_version" ]]; then
   fail "源码包版本声明不一致，请重新下载完整发行包"
 fi
-for required in src/prompt_hub/api.py deploy/mac/启动-Prompt-Hub.command deploy/windows-worker/RELEASE.json; do
+for required in src/prompt_hub/api.py deploy/mac/启动-Prompt-Hub.command scripts/build_mac_portable_launcher.py deploy/desktop-ui/index.html deploy/desktop-ui/desktop.css deploy/desktop-ui/desktop.js deploy/windows-worker/RELEASE.json; do
   if [[ ! -f "$source_root/$required" ]]; then
     fail "源码包缺少必要文件：$required"
   fi
@@ -135,15 +135,21 @@ cd "$INSTALL_ROOT"
 print -r -- "正在准备 Python 3.12 和程序依赖，第一次可能需要几分钟…"
 uv sync --python 3.12 --no-default-groups
 
+print -r -- "正在建立双击启动器…"
+uv run --no-sync python scripts/build_mac_portable_launcher.py \
+  --source-root "$INSTALL_ROOT" \
+  --output "$INSTALL_ROOT/Soda Prompt Hub.app" \
+  --runtime-root-hint "$INSTALL_ROOT"
+
 print -r -- "正在建立个人资料目录和本地数据库…"
 uv run --no-sync prompt-hub init
 
 print -r -- ""
-print -r -- "安装完成。以后双击程序目录中的“启动-Prompt-Hub.command”即可使用。"
+print -r -- "安装完成。以后双击“Soda Prompt Hub.app”即可使用。"
 print -r -- "程序位置：$INSTALL_ROOT"
 
 trap - ZERR
 if [[ "$SKIP_START" != "1" ]]; then
-  open "$INSTALL_ROOT/启动-Prompt-Hub.command"
+  open "$INSTALL_ROOT/Soda Prompt Hub.app"
 fi
 pause_before_close

@@ -1,15 +1,52 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from prompt_hub import maintenance
 from prompt_hub.creative import CreativeStore
 from prompt_hub.database import PromptDatabase
 from prompt_hub.embedding_index import EmbeddingIndexStore
 from prompt_hub.maintenance import BackupManager, MaintenanceError, doctor, verify_backup
+
+
+def test_backup_git_uses_runtime_path_without_console(settings, tmp_path, monkeypatch) -> None:
+    _seed_backup_roots(settings)
+    (settings.git_sources_root / "sample").mkdir()
+    monkeypatch.setattr(maintenance.shutil, "which", lambda _name: "C:/runtime/git.exe")
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append((command, kwargs))
+        assert command[0] == "C:/runtime/git.exe"
+        assert "creationflags" in kwargs
+        return subprocess.CompletedProcess(command, 0, "abc123\n", "")
+
+    monkeypatch.setattr(maintenance.subprocess, "run", run)
+    result = BackupManager(settings).create(tmp_path / "backup")
+    assert result["ok"]
+    assert result["manifest"]["git_sources"][0]["revision"] == "abc123"
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("failure", [FileNotFoundError(), subprocess.TimeoutExpired("git", 10)])
+def test_backup_survives_unavailable_git_metadata(settings, tmp_path, monkeypatch, failure) -> None:
+    _seed_backup_roots(settings)
+    (settings.git_sources_root / "sample").mkdir()
+
+    def run(*_args, **_kwargs):
+        raise failure
+
+    monkeypatch.setattr(maintenance.subprocess, "run", run)
+    result = BackupManager(settings).create(tmp_path / "backup")
+    assert result["ok"]
+    assert result["manifest"]["git_sources"][0]["revision"] == "unavailable"
+    assert result["manifest"]["git_sources"][0]["warning"]
+    assert verify_backup(tmp_path / "backup")["ok"]
 
 
 def _seed_backup_roots(settings) -> dict[str, str]:

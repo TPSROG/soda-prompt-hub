@@ -32,9 +32,9 @@ Windows 可以共享 `D:\PromptHub-Bridge`；Mac 通过 Finder 挂载后可能�
 4. 按当前电脑的盘符修改 `bridge_root`、`lora_roots` 和 `model_roots`；不使用的模型类型可以删除。
 5. 启动 ComfyUI，并确认浏览器能打开 `http://127.0.0.1:8188`。
 6. 确认已安装 Python 3.12；当前实测版本是 3.12.10。
-7. 双击 `1-先自检.bat`。
-8. 看到 `[OK] Worker and local ComfyUI are ready.` 后，双击 `2-启动Worker.bat`。
-9. 保持 Worker 黑色窗口开启。窗口显示“等待任务”时，Mac 才能投递真实任务。
+7. 正式图形包可以直接双击 `Soda Compute Worker.exe`，在控制台点“运行自检”和“启动 Worker”。
+8. 仅在图形启动器不可用或排障时，才双击 `1-先自检.bat` 和 `2-启动Worker.bat`。
+9. 图形启动器可收起到系统托盘；Worker 会在后台继续等待任务，不显示黑色命令窗口。
 
 自检写出的 `worker-status.json` 包含 `worker_build_sha256`，代表实际启动脚本的 SHA-256。任务成功
 或失败时，结果信封也会回显同一字段。它可以确认当前接任务的是刚同步的新版 Worker，而不是仍在
@@ -53,7 +53,7 @@ VAE、Text Encoder、放大模型和 ControlNet 目录。Mac 任务只能使用�
 ## 日常顺序
 
 1. 启动 ComfyUI。
-2. 双击 `2-启动Worker.bat`。
+2. 双击 `Soda Compute Worker.exe` 并启动 Worker；维护包则继续使用 `2-启动Worker.bat`。
 3. 在 Mac Prompt Hub 投递任务。
 4. Worker 串行执行；图片与记录回到共享目录 `inbox`。
 5. Mac 校验源文件和回传文件的 SHA-256，之后再进入结果审核。
@@ -134,7 +134,8 @@ Mac 投递时会在任务 manifest 中记录生成包的 SHA-256。Worker 校验
 
 ## 停止与恢复
 
-- 正常停止：在 Worker 窗口按 `Ctrl+C`。
+- 图形版正常停止：托盘或控制台点“停止 Worker”；正在执行任务时会拒绝停止，等待回传后再操作。
+- 维护脚本正常停止：在 Worker 窗口按 `Ctrl+C`。
 - 意外关机：重新启动 ComfyUI，再双击 `2-启动Worker.bat`。Worker 会恢复 `processing` 中的任务。
 - 已拿到 `prompt_id` 的任务会继续查询原任务，不重新排队。
 - 单机锁会阻止同时打开两个 Worker，避免一张 GPU 重复领取。
