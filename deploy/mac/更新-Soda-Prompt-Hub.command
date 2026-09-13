@@ -84,7 +84,7 @@ source_version="$(version_from_pyproject "$source_root/pyproject.toml")"
 release_version="$(version_from_release "$source_root/RELEASE.json")"
 installed_version="$(version_from_pyproject "$INSTALL_ROOT/pyproject.toml")"
 [[ -n "$source_version" && "$source_version" == "$release_version" ]] || fail "新版源码的版本声明不一致，请重新下载完整发行包"
-for required in src/prompt_hub/api.py deploy/mac/启动-Prompt-Hub.command deploy/mac/诊断-Prompt-Hub.command; do
+for required in src/prompt_hub/api.py deploy/mac/启动-Prompt-Hub.command deploy/mac/诊断-Prompt-Hub.command scripts/build_mac_portable_launcher.py deploy/desktop-ui/index.html deploy/desktop-ui/desktop.css deploy/desktop-ui/desktop.js; do
   [[ -f "$source_root/$required" ]] || fail "新版源码缺少必要文件：$required"
 done
 
@@ -125,9 +125,6 @@ for launcher in "$staging"/deploy/mac/*.command; do
   chmod u+x "$staging/${launcher:t}"
 done
 
-print -r -- "正在准备新版运行环境…"
-(cd "$staging" && "$UV_BIN" sync --python 3.12 --no-default-groups) || { rm -rf "$staging"; fail "新版依赖准备失败，旧程序保持不变"; }
-
 program_backup="$PROGRAM_BACKUP_ROOT/${installed_version:-unknown}-$timestamp"
 mv "$INSTALL_ROOT" "$program_backup" || { rm -rf "$staging"; fail "无法建立旧程序快照"; }
 if ! mv "$staging" "$INSTALL_ROOT"; then
@@ -135,12 +132,21 @@ if ! mv "$staging" "$INSTALL_ROOT"; then
   fail "无法启用新版程序，旧程序已恢复"
 fi
 
-print -r -- "正在检查新版数据库兼容性…"
-if ! (cd "$INSTALL_ROOT" && "$UV_BIN" run --no-sync prompt-hub init); then
+print -r -- "正在最终程序位置准备新版运行环境…"
+if ! (
+  cd "$INSTALL_ROOT" &&
+  "$UV_BIN" sync --python 3.12 --no-default-groups &&
+  "$UV_BIN" run --no-sync python scripts/build_mac_portable_launcher.py \
+    --source-root "$INSTALL_ROOT" \
+    --output "$INSTALL_ROOT/Soda Prompt Hub.app" \
+    --runtime-root-hint "$INSTALL_ROOT" &&
+  print -r -- "正在检查新版数据库兼容性…" &&
+  "$UV_BIN" run --no-sync prompt-hub init
+); then
   failed_program="$PROGRAM_BACKUP_ROOT/failed-$source_version-$timestamp"
   mv "$INSTALL_ROOT" "$failed_program" 2> /dev/null
   mv "$program_backup" "$INSTALL_ROOT" 2> /dev/null
-  fail "新版初始化失败，旧程序已恢复；个人资料备份位于 $data_backup"
+  fail "新版运行环境或初始化失败，旧程序已恢复；个人资料备份位于 $data_backup"
 fi
 
 print -r -- ""
@@ -150,6 +156,6 @@ print -r -- "旧程序快照：$program_backup"
 print -r -- "提示词资料库和模型没有在本次更新中改变。"
 
 if [[ "$SKIP_START" != "1" ]]; then
-  open "$INSTALL_ROOT/启动-Prompt-Hub.command"
+  open "$INSTALL_ROOT/Soda Prompt Hub.app"
 fi
 pause_before_close

@@ -306,5 +306,47 @@
   .archive-add-button, .character-create-button { background: var(--signal); color: white; padding: 8px 10px; font: 800 9px monospace; }
   .character-actions { display: flex; flex-wrap: wrap; gap: 7px; }
   .recipe-name { width: 100%; margin-top: 12px; border: 1px solid rgba(244,237,223,.35); background: rgba(255,255,255,.06); color: #f4eddf; padding: 9px; }
+  .oc-seed-modal { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center; padding: 24px; }
+  .oc-seed-modal[hidden] { display: none; }
+  .oc-seed-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: rgba(23,24,21,.76); cursor: default; }
+  .oc-seed-dialog { position: relative; width: min(820px, 100%); max-height: min(88vh, 920px); overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--ink); background: #f1eadc; box-shadow: 14px 14px 0 rgba(0,0,0,.28); }
+  .oc-seed-head { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; gap: 18px; align-items: start; border-bottom: 1px solid var(--ink); background: #f1eadc; padding: 20px 22px 16px; }
+  .oc-seed-head .section-label { margin-bottom: 7px; color: var(--signal); }
+  .oc-seed-head h2 { margin: 0; font: 700 30px/1.05 "Iowan Old Style", serif; letter-spacing: -.025em; }
+  .oc-seed-head > button { flex: 0 0 auto; border: 1px solid var(--ink); padding: 5px 10px; font: 900 18px/1 monospace; }
+  .oc-seed-summary { margin: 0; border-bottom: 1px solid var(--line); padding: 12px 22px; color: var(--muted); font: 700 10px/1.5 monospace; }
+  .oc-seed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; border-bottom: 1px solid var(--line); background: var(--line); }
+  .oc-seed-grid fieldset, .oc-seed-toggle, .oc-seed-select { min-width: 0; margin: 0; border: 0; background: #f7f0e4; padding: 15px 18px; }
+  .oc-seed-grid fieldset { display: flex; flex-wrap: wrap; gap: 12px; }
+  .oc-seed-grid legend, .oc-seed-select > span { width: 100%; margin-bottom: 8px; color: var(--muted); font: 800 9px/1.2 monospace; letter-spacing: .08em; }
+  .oc-seed-radio { display: flex !important; grid-template-columns: auto 1fr; align-items: center; gap: 6px !important; color: var(--ink) !important; text-transform: none !important; }
+  .oc-seed-radio input, .oc-seed-toggle input { width: auto; accent-color: var(--signal); }
+  .oc-seed-radio:has(input:disabled) { opacity: .35; }
+  .oc-seed-toggle { display: flex !important; grid-template-columns: auto 1fr; gap: 10px !important; align-items: start; color: var(--ink) !important; text-transform: none !important; }
+  .oc-seed-toggle > input { margin-top: 2px; }
+  .oc-seed-toggle strong, .oc-seed-toggle small { display: block; }
+  .oc-seed-toggle strong { font: 800 11px/1.3 monospace; }
+  .oc-seed-toggle small { margin-top: 5px; color: var(--muted); font: 10px/1.45 "Avenir Next", sans-serif; }
+  .oc-seed-toggle:has(input:disabled) { opacity: .42; }
+  .oc-seed-select { display: block !important; color: var(--ink) !important; text-transform: none !important; }
+  .oc-seed-select select { min-width: 0; padding: 8px 2px; }
+  .oc-seed-grid > .oc-seed-toggle:last-child { grid-column: 1 / -1; }
+  .oc-seed-prompts { padding: 17px 22px; border-bottom: 1px solid var(--line); }
+  .oc-seed-prompts > div:first-child { display: flex; justify-content: space-between; gap: 18px; align-items: baseline; }
+  .oc-seed-prompts strong { font: 800 11px/1.3 monospace; }
+  .oc-seed-prompts small { color: var(--muted); font-size: 9px; }
+  #ocSeedPromptList { display: grid; gap: 6px; margin-top: 10px; }
+  .oc-seed-prompt { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 9px; align-items: start; border: 1px solid var(--line); background: #ebe3d4; padding: 9px 10px; color: var(--ink); text-transform: none; }
+  .oc-seed-prompt input { width: auto; margin-top: 2px; accent-color: var(--signal); }
+  .oc-seed-prompt strong, .oc-seed-prompt small { display: block; }
+  .oc-seed-prompt small { margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font: 9px monospace; }
+  .oc-seed-empty { margin: 0; color: var(--muted); font-size: 10px; }
+  .oc-seed-preview { margin: 16px 22px 0; border-left: 4px solid var(--acid); background: #e2dacb; padding: 11px 13px; }
+  .oc-seed-preview strong { font: 800 9px monospace; }
+  .oc-seed-preview p { margin: 6px 0 0; max-height: 100px; overflow: auto; white-space: pre-wrap; color: var(--muted); font: 10px/1.5 monospace; }
+  .oc-seed-note { margin: 12px 22px 0; color: var(--muted); font-size: 10px; }
+  .oc-seed-actions { position: sticky; bottom: 0; display: grid; grid-template-columns: 1fr 1.6fr; gap: 8px; margin-top: 14px; border-top: 1px solid var(--ink); background: #f1eadc; padding: 14px 22px; }
+  .oc-seed-actions button { border: 1px solid var(--ink); padding: 11px 12px; text-align: left; font: 800 10px monospace; }
+  .oc-seed-actions .primary { border-color: var(--signal); background: var(--signal); color: white; }
   @media (max-width: 1180px) { .creative-layout { grid-template-columns: 220px minmax(0, 1fr); } .output-rail { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); } .project-journey-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
-  @media (max-width: 760px) { .creative-heading { display: block; background: #ece5d5; } .creative-heading p { margin-top: 12px; } .creative-layout { display: block; } .project-rail { border-right: 0; border-bottom: 1px solid var(--line); } .slot-grid, .project-head, .result-review-tools, .review-slot-grid, .review-findings, .review-actions, .iteration-change, .iteration-panel-actions, .dataset-export-panel, .wd14-toolbar { grid-template-columns: 1fr; } .slot-card:first-child { grid-column: auto; } .reference-list, .sourcing-candidates, .result-gallery, .project-journey-grid { grid-template-columns: 1fr; } .project-journey-card { min-height: 0; } .project-journey-head { align-items: start; } .generation-grid { grid-template-columns: 1fr 1fr; } .workflow-pair { grid-template-columns: 1fr; } .workflow-lora-filter { grid-template-columns: 1fr; } #creativeBrief, #creativeResultsSection, .workflow-dispatch, .output-rail { scroll-margin-top: 176px; } }
+  @media (max-width: 760px) { .creative-heading { display: block; background: #ece5d5; } .creative-heading p { margin-top: 12px; } .creative-layout { display: block; } .project-rail { border-right: 0; border-bottom: 1px solid var(--line); } .slot-grid, .project-head, .result-review-tools, .review-slot-grid, .review-findings, .review-actions, .iteration-change, .iteration-panel-actions, .dataset-export-panel, .wd14-toolbar, .oc-seed-grid { grid-template-columns: 1fr; } .slot-card:first-child { grid-column: auto; } .reference-list, .sourcing-candidates, .result-gallery, .project-journey-grid { grid-template-columns: 1fr; } .project-journey-card { min-height: 0; } .project-journey-head { align-items: start; } .generation-grid { grid-template-columns: 1fr 1fr; } .workflow-pair { grid-template-columns: 1fr; } .workflow-lora-filter { grid-template-columns: 1fr; } #creativeBrief, #creativeResultsSection, .workflow-dispatch, .output-rail { scroll-margin-top: 176px; } .oc-seed-modal { align-items: end; padding: 0; } .oc-seed-dialog { width: 100%; max-height: 94vh; border-width: 1px 0 0; box-shadow: none; } .oc-seed-head { padding: 16px; } .oc-seed-head h2 { font-size: 25px; } .oc-seed-summary, .oc-seed-prompts { padding-left: 16px; padding-right: 16px; } .oc-seed-prompts > div:first-child { display: block; } .oc-seed-prompts small { display: block; margin-top: 5px; } .oc-seed-preview { margin-left: 16px; margin-right: 16px; } .oc-seed-note { margin-left: 16px; margin-right: 16px; } .oc-seed-actions { padding: 12px 16px; } }

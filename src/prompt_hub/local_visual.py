@@ -71,7 +71,13 @@ class VisualEncoderProtocol(Protocol):
 
 
 class VisualCatalogProtocol(Protocol):
-    def discover(self, asset_types: set[str] | None = None) -> list[VisualAsset]: ...
+    def discover(
+        self,
+        asset_types: set[str] | None = None,
+        *,
+        context: VisualJobProgress | None = None,
+        max_items: int = 0,
+    ) -> list[VisualAsset]: ...
 
 
 SessionFactory = Callable[[Path], Any]
@@ -371,10 +377,13 @@ class LocalVisualIndexService:
         invalid = selected_types.difference(_asset_types())
         if invalid:
             raise VisualIndexError(f"未知视觉素材类型：{', '.join(sorted(invalid))}")
-        assets = self.catalog.discover(selected_types or None)
         max_items = int(payload.get("max_items", 0) or 0)
-        if max_items:
-            assets = assets[: max(1, min(max_items, 10000))]
+        context.update(0, 0, "开始扫描视觉素材，正在读取本机资料清单…")
+        assets = self.catalog.discover(
+            selected_types or None,
+            context=context,
+            max_items=max(1, min(max_items, 10000)) if max_items else 0,
+        )
         known = self.store.known_hashes(self.index_id)
         pending = [asset for asset in assets if known.get(asset.asset_id) != asset.source_sha256]
         skipped = len(assets) - len(pending)
@@ -383,12 +392,14 @@ class LocalVisualIndexService:
         context.update(0, len(pending), f"发现 {len(assets)} 张素材，{len(pending)} 张需要建立索引")
         batch: list[tuple[VisualAsset, list[float]]] = []
         for number, asset in enumerate(pending, start=1):
+            context.update(number - 1, len(pending), f"正在编码 {asset.path.name}")
             try:
                 vector = self.encoder.encode_path(asset.path)
             except (OSError, VisualIndexError) as error:
                 failures.append({"asset_id": asset.asset_id, "error": str(error)[:500]})
             else:
                 batch.append((asset, vector))
+            context.update(number - 1, len(pending), f"正在保存 {asset.path.name}")
             if len(batch) >= 8 or number == len(pending):
                 indexed += self._flush(batch)
                 batch.clear()
@@ -397,6 +408,7 @@ class LocalVisualIndexService:
             raise VisualIndexError(f"视觉索引没有写入任何图片：{failures[0]['error']}")
         pruned = 0
         if not max_items:
+            context.update(len(pending), len(pending), "正在核对已移除素材；保留本次有效索引")
             pruned = self.store.prune_assets(
                 self.index_id,
                 {asset.asset_id for asset in assets},

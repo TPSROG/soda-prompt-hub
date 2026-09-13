@@ -9,6 +9,20 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from prompt_hub.api import create_app
+from prompt_hub.creative import CreativeStore
+from prompt_hub.project_journey import _project_tasks
+
+
+def test_journey_queries_compute_node_ids_not_roles() -> None:
+    class Remote:
+        def list_nodes(self):
+            return [{"node_id": "compute-5060ti", "role": "compute_5060ti"}]
+
+        def list_tasks(self, node_id, **_kwargs):
+            assert node_id == "compute-5060ti"
+            return [{"project_id": "qa", "task_type": "comfyui_generate", "updated_at": "2026"}]
+
+    assert len(_project_tasks(Remote(), "qa")) == 1
 
 
 def _image_bytes(color: str = "purple") -> bytes:
@@ -103,11 +117,9 @@ def test_project_journey_sync_and_delivery_keep_lineage_without_reviewing(  # no
             "prompt": {"1": {"class_type": "KSampler"}},
             "workflow": {"nodes": [{"id": 1, "type": "KSampler"}]},
         }
-        updated = client.put(
-            f"/api/creative/projects/{project_id}",
-            json={"generation": generation},
-        )
-        assert updated.status_code == 200
+        # Seed worker-owned metadata at the storage boundary. Normal editor PUTs
+        # cannot overwrite imported image records with an old browser snapshot.
+        CreativeStore(settings.database_path).update_project(project_id, {"generation": generation})
         selected = client.put(
             f"/api/creative/projects/{project_id}/results/{asset['asset_id']}/dataset",
             json={

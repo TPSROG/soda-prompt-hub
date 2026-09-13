@@ -496,14 +496,20 @@ def read_project_lineage(source_root: Path) -> dict[str, Any]:
 
 
 def _project_tasks(remote_store: RemoteNodeStore, project_id: str) -> list[dict[str, Any]]:
-    try:
-        return [
-            task
-            for task in remote_store.list_tasks("compute_5060ti", limit=1000)
-            if task.get("project_id") == project_id and task.get("task_type") == "comfyui_generate"
-        ]
-    except RemoteNodeError:
-        return []
+    tasks = []
+    for node in remote_store.list_nodes():
+        if node.get("role") != "compute_5060ti":
+            continue
+        try:
+            tasks.extend(
+                task
+                for task in remote_store.list_tasks(str(node["node_id"]), limit=1000)
+                if task.get("project_id") == project_id
+                and task.get("task_type") == "comfyui_generate"
+            )
+        except RemoteNodeError:
+            continue
+    return sorted(tasks, key=lambda task: str(task.get("updated_at", "")), reverse=True)
 
 
 def _task_status(task: Mapping[str, Any] | None, *, device_name: str) -> str:

@@ -7,9 +7,34 @@ from fastapi.testclient import TestClient
 
 from prompt_hub import __version__, api, local_model
 from prompt_hub.api import create_app
+from prompt_hub.creative import CreativeStore
 from prompt_hub.database import PromptDatabase
 from prompt_hub.importers import import_all
 from prompt_hub.model_connections import ModelConnection
+
+
+def test_stale_editor_save_cannot_remove_imported_results(settings) -> None:
+    with TestClient(create_app(settings)) as client:
+        project = client.post("/api/creative/projects", json={"title": "QA stale editor"}).json()
+        store = CreativeStore(settings.database_path)
+        store.update_project(
+            project["project_id"],
+            {
+                "generation": {
+                    "result_assets": [{"asset_id": "imported", "filename": "qa.png"}],
+                }
+            },
+        )
+        saved = client.put(
+            f"/api/creative/projects/{project['project_id']}",
+            json={
+                "brief_zh": "unsaved prompt",
+                "generation": {"seed": "42", "result_assets": []},
+            },
+        ).json()
+        assert saved["brief_zh"] == "unsaved prompt"
+        assert saved["generation"]["seed"] == "42"
+        assert saved["generation"]["result_assets"][0]["asset_id"] == "imported"
 
 
 def test_home_uses_configured_device_name_without_script_injection(settings) -> None:
@@ -274,6 +299,11 @@ def test_api_health_stats_search_and_page(source_tree, monkeypatch) -> None:
                 "发送到 <span data-remote-device-name>",
                 "projectJourneyGrid",
                 "creativeResultsSection",
+                "ocSeedModal",
+                "ocSeedOutfit",
+                "ocSeedPromptList",
+                "确认并进入创作台",
+                "/creative-seed",
                 "从想法到数据集",
                 "syncProjectDataset",
                 "/dataset-workspace",
@@ -403,7 +433,8 @@ def test_remote_page_auto_diagnoses_saved_nodes_and_after_save(settings) -> None
     assert "function renderDiagnostic(card,result)" in page
     assert "function diagnoseNode(card,nodeId)" in page
     assert "function diagnoseSavedNodes()" in page
-    assert "await diagnoseNode(card,nodeId); return;" in page
+    assert "const result=await diagnoseNode(card,nodeId);" in page
+    assert "runNodeAction(card,button)" in page
     assert "diagnoseSavedNodes(),loadCatalogCounts()" in page
     assert "正在自动检查共享目录与 Worker 状态" in page
     assert "暂时无法检查设备" in page
@@ -546,6 +577,15 @@ def test_api_imports_and_searches_oc_manager_json(settings) -> None:
                 "race": "人类",
                 "story": "调查沉没图书馆",
                 "prompts": [{"id": "p1", "label": "portrait", "text": "silver eyes"}],
+                "appearance": {
+                    "face": {"front": "silver eyes", "back": "silver hair from behind"},
+                    "upperSfw": {"front": "white shirt", "back": "white shirt"},
+                    "fullSfw": {"front": "black trousers", "back": "black trousers"},
+                    "upperNsfw": {"front": "", "back": ""},
+                    "fullNsfw": {"front": "", "back": ""},
+                    "outfits": [],
+                    "activeOutfitId": "",
+                },
             }
         ],
         "worlds": [{"id": "world-api", "name": "镜海", "system": "generic"}],
@@ -573,7 +613,14 @@ def test_api_imports_and_searches_oc_manager_json(settings) -> None:
         profile = client.get("/api/oc-manager/characters/char-api")
         assert profile.status_code == 200
         assert profile.json()["prompts"][0]["text"] == "silver eyes"
+        seed = client.get("/api/oc-manager/characters/char-api/creative-seed")
+        assert seed.status_code == 200
+        assert seed.json()["appearance"]["front"]["sfw"] == (
+            "silver eyes, white shirt, black trousers"
+        )
+        assert seed.json()["world_context"]["lore"]["locations"][0]["name"] == "沉没图书馆"
         assert client.get("/api/oc-manager/characters/missing").status_code == 404
+        assert client.get("/api/oc-manager/characters/missing/creative-seed").status_code == 404
         assert client.get("/api/oc-manager/worlds").json()[0]["character_count"] == 1
         lore = client.get("/api/oc-manager/lore", params={"query": "沉没"}).json()
         assert lore["count"] == 1

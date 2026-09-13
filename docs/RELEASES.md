@@ -33,7 +33,20 @@ Soda Prompt Hub 使用 `主版本.次版本.修订版本`：
 根目录 `RELEASE.json` 描述 Mac 程序版本、Python 版本和配套 Worker。`deploy/windows-worker/RELEASE.json`
 描述 Worker 版本、发布通道和协议。自动测试要求它们与 `pyproject.toml` 保持一致。
 
-## Windows Worker 发行包
+## 桌面发行包
+
+普通用户使用三个标准产物：
+
+- Mac Apple Silicon：自包含 DMG；
+- Windows Desktop：per-user Setup；
+- Windows Compute Worker：独立 per-user Setup。
+
+三个产品均把程序与个人数据分离。当前 1.1.0 商业候选包暂未做平台签名，首次运行的系统提示、系统要求、
+文件大小和 SHA-256 必须随 Release 一起公布。详细边界见[商业分发与安装说明](COMMERCIAL_RELEASE.md)。
+
+便携 ZIP 继续作为维护和排错选项，不作为普通用户的首选安装路径。
+
+### Windows Worker 便携发行包
 
 构建命令：
 
@@ -49,21 +62,24 @@ ZIP 内文件时间和权限使用固定值；同一提交、同一工具链重�
 
 ## Mac 更新策略
 
-正式 Release 提供完整源码 ZIP。用户从新版解压目录运行 `更新-Soda-Prompt-Hub.command`：更新器
-先备份个人资料和旧程序，再准备依赖和初始化；失败时恢复旧程序。提示词来源和模型不随代码更新。
+商业 DMG 通过覆盖 `/Applications/Soda Prompt Hub.app` 升级，个人资料目录保持不变。源码 ZIP 的安全
+更新器继续作为维护路径：它先备份个人资料和旧程序，再准备依赖和初始化；失败时恢复旧程序。提示词来源
+和模型不随代码更新。
 
 ## 发布检查清单
 
-1. 将版本从开发版切换为候选版并同步两份 `RELEASE.json`。
+1. 同步 `pyproject.toml`、根 `RELEASE.json` 和 Worker `RELEASE.json` 的正式版本与通道。
 2. 更新 `CHANGELOG.md`，写清新增、修复、升级步骤和兼容性。
 3. 运行格式、lint、类型、锁文件、全量测试和覆盖率检查。
-4. 检查全部页面脚本语法与 Mac `.command` 语法。
-5. 构建 Worker ZIP，解压并验证 `MANIFEST.sha256`。
-6. 扫描发行文件中的凭据、真实配置、个人绝对路径和大文件。
-7. 在桌面和手机视口检查首页版本、数据结构版本与设备兼容状态。
-8. 人工验收安全更新的正常路径和失败回滚。
-9. 候选版验收通过后，切换为不带后缀的正式版本，再重复全部检查。
-10. 经维护者明确确认后才 commit、push、合并、打 tag 和创建 GitHub Release。
+4. 检查全部页面脚本语法、Mac `.command` 语法和两个 Windows C# 工程 build。
+5. 构建 Mac DMG 与两个 Windows Setup，逐个核对内部 manifest 和外层 SHA-256。
+6. 在隔离环境验证 Mac App 只使用包内 Python；运行 `hdiutil verify`。
+7. 在 Windows 实机验证覆盖安装、包内 Python、Core health、卸载保留数据和重装。
+8. 扫描发行文件中的凭据、真实配置、个人绝对路径、`.venv`、`__pycache__`、`.pyc` 和大文件。
+9. 生成统一发布清单和 SBOM；公布未签名状态、系统要求、文件大小与 SHA-256。
+10. 在桌面和手机视口检查首页版本、数据结构版本与设备兼容状态。
+11. 平台签名启用后，重新验证签名、notarization、安装、升级和卸载，不复用签名前的 hash。
+12. 经维护者明确确认后才 commit、push、合并、打 tag 和创建 GitHub Release。
 
 ## Git 标签与 Release
 

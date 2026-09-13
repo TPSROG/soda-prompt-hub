@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 DEFAULT_LM_STUDIO_URL = "http://127.0.0.1:1234/v1"
 MAX_MODEL_RESPONSE_BYTES = 4 * 1024 * 1024
+SLOT_COMPLETION_MAX_TOKENS = 4096
 
 
 class LocalModelError(RuntimeError):
@@ -111,7 +112,7 @@ def organize_slots(
             },
         ],
         "temperature": 0.35,
-        "max_tokens": 500,
+        "max_tokens": SLOT_COMPLETION_MAX_TOKENS,
         "stream": False,
     }
     response = _request_json(
@@ -125,7 +126,13 @@ def organize_slots(
         service_name="外部模型服务" if external else "LM Studio",
     )
     try:
-        content = response["choices"][0]["message"]["content"]
+        choice = response["choices"][0]
+        if isinstance(choice, dict) and choice.get("finish_reason") == "length":
+            raise LocalModelError(
+                f"AI补全达到输出上限（{SLOT_COMPLETION_MAX_TOKENS} tokens），"
+                "回答被截断，本次建议未应用。可缩短创作描述或换用其他模型后手动重试。"
+            )
+        content = choice["message"]["content"]
         suggested = _extract_json_object(str(content))
     except (KeyError, IndexError, TypeError, json.JSONDecodeError) as error:
         raise LocalModelError("本地模型没有返回可识别的七槽位 JSON") from error

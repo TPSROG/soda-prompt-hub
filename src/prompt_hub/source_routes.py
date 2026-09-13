@@ -43,6 +43,10 @@ def create_source_router(
     def get_source_sync_status() -> list[dict[str, Any]]:
         return service.status()
 
+    @router.get("/api/sources/sync-jobs")
+    def get_source_sync_jobs() -> list[dict[str, Any]]:
+        return job_runner.store.list_jobs(job_type="source_sync", limit=20)
+
     @router.get("/api/sources/{source_id}/facets")
     def get_source_facets(source_id: str) -> dict[str, list[str]]:
         source = service.database.get_source(source_id)
@@ -56,6 +60,7 @@ def create_source_router(
             "source_sync",
             {"source_ids": payload.source_ids, "clone_missing": payload.clone_missing},
             max_attempts=1,
+            exclusive=True,
         )
         return {"job": job}
 

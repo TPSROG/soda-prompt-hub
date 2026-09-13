@@ -178,13 +178,30 @@ class CreativeStore:
             ).fetchall()
         return [_project_from_row(row) for row in rows]
 
-    def update_project(self, project_id: str, values: Mapping[str, Any]) -> dict[str, Any]:
-        current = self.get_project(project_id)
-        if current is None:
-            raise KeyError(project_id)
-        merged = {**current, **values}
-        payload = normalize_project(merged)
+    def update_project(
+        self,
+        project_id: str,
+        values: Mapping[str, Any],
+        *,
+        preserve_results: bool = False,
+    ) -> dict[str, Any]:
         with self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM creative_projects WHERE project_id = ?",
+                (project_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(project_id)
+            current = _project_from_row(row)
+            merged = {**current, **values}
+            if preserve_results and "generation" in values:
+                # Result imports/reviews have dedicated APIs; an old editor snapshot is not truth.
+                merged["generation"] = {
+                    **values["generation"],
+                    "result_assets": current.get("generation", {}).get("result_assets", []),
+                }
+            payload = normalize_project(merged)
             connection.execute(
                 """
                 UPDATE creative_projects SET

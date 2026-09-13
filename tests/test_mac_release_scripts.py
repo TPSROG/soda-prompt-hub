@@ -34,6 +34,8 @@ def test_mac_updater_replaces_program_and_preserves_old_snapshot(tmp_path) -> No
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert (install_root / "RELEASE.json").is_file()
+    assert (install_root / "Soda Prompt Hub.app").is_dir()
+    assert (tmp_path / "uv-sync-root.txt").read_text().strip() == str(install_root)
     assert not (install_root / "old-marker.txt").exists()
     snapshots = list(program_backups.iterdir())
     assert len(snapshots) == 1
@@ -81,7 +83,12 @@ if [ "$1" = "run" ] && [ "$3" = "prompt-hub" ] && [ "$4" = "init" ]; then
   exit 0
 fi
 if [ "$1" = "sync" ]; then
+  printf '%s\n' "$PWD" > "$FAKE_UV_SYNC_LOG"
   exit 0
+fi
+if [ "$1" = "run" ] && [ "$2" = "--no-sync" ] && [ "$3" = "python" ]; then
+  shift 3
+  exec "$FAKE_PYTHON" "$@"
 fi
 exit 0
 """
@@ -100,6 +107,8 @@ exit 0
         "PROMPT_HUB_UPDATE_SKIP_STOP": "1",
         "PROMPT_HUB_UV_BIN": str(fake_uv),
         "FAKE_UV_FAIL_INIT": "1" if fail_init else "0",
+        "FAKE_PYTHON": sys.executable,
+        "FAKE_UV_SYNC_LOG": str(tmp_path / "uv-sync-root.txt"),
     }
     result = subprocess.run(  # noqa: S603
         ["/bin/zsh", str(repository / "deploy/mac/更新-Soda-Prompt-Hub.command")],

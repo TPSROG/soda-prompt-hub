@@ -265,6 +265,7 @@ def test_creative_api_flow(settings, monkeypatch) -> None:
 
 def test_local_assist_preserves_locked_slots(monkeypatch) -> None:
     def fake_request(_url, **_kwargs):
+        assert _kwargs["payload"]["max_tokens"] == 4096
         return {
             "choices": [
                 {
@@ -294,6 +295,30 @@ def test_local_assist_preserves_locked_slots(monkeypatch) -> None:
     assert result["suggested_slots"]["character"] == "silver-haired investigator"
     assert result["suggested_slots"]["outfit"] == "black coat"
     assert result["locked_slots"] == ["character"]
+
+
+@pytest.mark.parametrize("content", ['{"character": "adult', '{"character": "adult artist"}'])
+def test_local_assist_rejects_truncated_response_without_retry(
+    settings, monkeypatch, content
+) -> None:
+    calls = []
+
+    def fake_request(url, **kwargs):
+        calls.append((url, kwargs))
+        return {"choices": [{"finish_reason": "length", "message": {"content": content}}]}
+
+    monkeypatch.setattr("prompt_hub.local_model._request_json", fake_request)
+    with TestClient(create_app(settings)) as client:
+        response = client.post(
+            "/api/creative/assist",
+            json={"brief": "test", "model": "local-model", "target_profile": "anima"},
+        )
+
+    assert response.status_code == 503
+    assert "4096 tokens" in response.json()["detail"]
+    assert "截断" in response.json()["detail"]
+    assert "未应用" in response.json()["detail"]
+    assert len(calls) == 1
 
 
 def test_local_models_unavailable_is_graceful(settings, monkeypatch) -> None:
@@ -375,6 +400,15 @@ def test_external_model_ui_keeps_existing_creative_actions() -> None:
         "$('#sendWorkflow').addEventListener",
     ):
         assert marker in INDEX_HTML
+
+
+def test_oc_character_start_uses_seed_picker_instead_of_forcing_style_slot() -> None:
+    assert 'id="ocSeedModal"' in INDEX_HTML
+    assert "/creative-seed" in INDEX_HTML
+    assert "function applyOcSeed()" in INDEX_HTML
+    assert "project.slot_locks?.character" in INDEX_HTML
+    assert "project.slot_locks?.outfit" in INDEX_HTML
+    assert "detail.prompts.map(p => p.text)" not in INDEX_HTML
 
     for removed_marker in (
         'id="datasetGeneralThreshold"',

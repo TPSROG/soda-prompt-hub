@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -52,7 +53,9 @@ from prompt_hub.lora_routes import create_lora_router
 from prompt_hub.media import resolve_media_path
 from prompt_hub.model_connections import MODEL_REF_PATTERN, ModelConnectionStore
 from prompt_hub.model_routes import create_model_router
-from prompt_hub.oc_manager import archive_import, parse_oc_manager_json
+from prompt_hub.oc_manager import archive_import, build_oc_creative_seed, parse_oc_manager_json
+from prompt_hub.optional_model_routes import create_optional_model_router
+from prompt_hub.optional_models import OptionalModelInstaller
 from prompt_hub.project_journey import ProjectJourneyServices, create_project_journey_router
 from prompt_hub.release_info import release_channel, system_version_info
 from prompt_hub.remote_nodes import RemoteNodeStore
@@ -75,10 +78,8 @@ from prompt_hub.tag_locale import (
 )
 from prompt_hub.visual_assets import VisualAssetCatalog
 from prompt_hub.visual_model import (
-    DOWNLOAD_JOB_TYPE,
     VisualModelConfigStore,
     VisualModelError,
-    make_download_handler,
 )
 from prompt_hub.visual_routes import create_visual_router
 from prompt_hub.web import render_index_html
@@ -176,6 +177,7 @@ class CreativeReviewBranchInput(BaseModel):
 class TagLocaleInput(BaseModel):
     tags: list[str] = Field(min_length=1, max_length=500)
     language: Literal["zh", "en"] = "zh"
+    allow_model: bool = True
 
 
 class CaptionLocaleInput(BaseModel):
@@ -258,17 +260,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         active_settings.tag_completions_root,
         locale_cache=tag_locale_cache,
     )
+    optional_models = OptionalModelInstaller(active_settings, job_store)
     job_runner = BackgroundJobRunner(
         job_store,
         {
             "dataset_scan": workspace_store.scan_job,
+            "comfy_scan": comfy_store.scan_job,
             ARCHIVE_JOB_TYPE: workspace_store.import_archive_job,
             "dataset_wd14": curation_store.tag_job,
             "dataset_krea2_vlm": curation_store.krea2_vlm_job,
             "dataset_krea2_locale": curation_store.krea2_locale_job,
             "source_sync": source_sync.job,
             "local_visual_index": local_visual.job,
-            DOWNLOAD_JOB_TYPE: make_download_handler(bundled_model_root),
+            **optional_models.handlers(),
             TAG_DOWNLOAD_JOB_TYPE: tag_store.download_job,
         },
     )
@@ -316,11 +320,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(
         create_lora_router(lora_store, workspace_store, curation_store, database)
     )
-    application.include_router(create_comfy_router(active_settings, comfy_store, creative_store))
+    application.include_router(
+        create_comfy_router(active_settings, comfy_store, creative_store, job_store, job_runner)
+    )
     application.include_router(create_embedding_router(embedding_store, workspace_store))
     application.include_router(create_search_router(hybrid_search))
     application.include_router(create_remote_router(remote_store))
     application.include_router(create_model_router(model_connections))
+    application.include_router(create_optional_model_router(optional_models, job_runner))
     application.include_router(create_source_router(source_sync, job_runner, web_capture))
     application.include_router(
         create_visual_router(
@@ -362,13 +369,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return render_index_html(remote_store.primary_device_label())
 
     @application.get("/api/health")
-    def health() -> dict[str, str]:
+    def health() -> dict[str, Any]:
         return {
             "status": "ok",
             "service": "soda-prompt-hub",
             "version": __version__,
             "release_channel": release_channel(),
             "database": str(active_settings.database_path),
+            "process_id": os.getpid(),
         }
 
     @application.get("/api/system/version")
@@ -411,7 +419,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 payload.tags,
                 language=payload.language,
                 cache=tag_locale_cache,
-                translator=tag_translator,
+                translator=tag_translator if payload.allow_model else None,
             )
         except TagLocaleError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
@@ -552,7 +560,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if value is not None
         }
         try:
-            return creative_store.update_project(project_id, values)
+            return creative_store.update_project(project_id, values, preserve_results=True)
         except KeyError as error:
             raise HTTPException(status_code=404, detail="Creative project not found") from error
 
@@ -749,6 +757,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if result is None:
             raise HTTPException(status_code=404, detail="Character not found")
         return result
+
+    @application.get("/api/oc-manager/characters/{character_id}/creative-seed")
+    def get_oc_character_creative_seed(character_id: str) -> dict[str, Any]:
+        result = database.get_oc_character(character_id)
+        if result is None:
+            raise HTTPException(status_code=404, detail="Character not found")
+        world = str(result.get("world", "")).strip()
+        lore_results = database.search_oc_lore(world=world, limit=1) if world else []
+        lore = lore_results[0].get("lore", {}) if lore_results else {}
+        return build_oc_creative_seed(
+            result["profile"],
+            prompts=result.get("prompts", []),
+            lore=lore,
+        )
 
     @application.get("/api/oc-manager/worlds")
     def list_oc_worlds() -> list[dict[str, Any]]:

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 from typing import Annotated, Any, Literal
+from urllib.parse import urlsplit
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from prompt_hub.desktop_connection import connection_summary, reconnect_url
 from prompt_hub.remote_nodes import RemoteNodeError, RemoteNodeStore
 
 
@@ -16,6 +20,7 @@ class RemoteNodeInput(BaseModel):
     role: Literal["compute_5060ti"]
     host: str = Field(default="", max_length=255)
     smb_mount: str = Field(default="", max_length=4096)
+    smb_share: str = Field(default="", max_length=255)
     enabled: bool = False
     capabilities: list[str] = Field(default_factory=list, max_length=50)
     notes: str = Field(default="", max_length=1000)
@@ -71,6 +76,38 @@ class LoraCatalogImportInput(BaseModel):
 def create_remote_router(store: RemoteNodeStore) -> APIRouter:
     router = APIRouter()
 
+    @router.get("/api/desktop/connection")
+    def desktop_connection(node_id: str | None = None) -> dict[str, Any]:
+        return connection_summary(store, node_id)
+
+    @router.post("/api/remote-nodes/{node_id}/connect")
+    def connect_remote_node(node_id: str, request: Request) -> dict[str, str]:
+        if sys.platform != "darwin":
+            raise HTTPException(status_code=409, detail="Windows 单机模式不需要连接远程共享。")
+        origin = request.headers.get("origin", "")
+        if (
+            request.url.hostname not in {"127.0.0.1", "localhost", "::1"}
+            or not origin
+            or urlsplit(origin).netloc != request.url.netloc
+        ):
+            raise HTTPException(status_code=403, detail="请从本机工作台发起连接。")
+        node = next((item for item in store.list_nodes() if item["node_id"] == node_id), {})
+        destination = reconnect_url(node)
+        if not destination:
+            raise HTTPException(status_code=422, detail="请先保存 Windows 主机地址和共享名称。")
+        try:
+            subprocess.run(  # noqa: S603 — fixed executable and validated credential-free SMB URL
+                ["/usr/bin/open", destination],
+                check=True,
+                timeout=5,
+            )
+        except (subprocess.SubprocessError, OSError) as error:
+            raise HTTPException(
+                status_code=503,
+                detail="系统连接窗口未打开。请稍后重试。",
+            ) from error
+        return {"message": "已打开系统连接窗口。首次请完成登录。密码可由系统钥匙串保存。"}
+
     @router.get("/api/remote-nodes")
     def list_remote_nodes() -> list[dict[str, Any]]:
         return store.list_nodes()
@@ -89,6 +126,10 @@ def create_remote_router(store: RemoteNodeStore) -> APIRouter:
         except RemoteNodeError as error:
             code = 404 if "尚未登记" in str(error) else 422
             raise HTTPException(status_code=code, detail=str(error)) from error
+
+    @router.get("/api/remote-nodes/{node_id}/connection")
+    def remote_node_connection(node_id: str) -> dict[str, Any]:
+        return connection_summary(store, node_id)
 
     @router.post("/api/remote-nodes/{node_id}/prepare", status_code=status.HTTP_201_CREATED)
     def prepare_remote_node_bridge(node_id: str) -> dict[str, Any]:

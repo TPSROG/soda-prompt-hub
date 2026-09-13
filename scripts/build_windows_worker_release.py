@@ -46,13 +46,14 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections import Counter
-from contextlib import AbstractContextManager, suppress
+from contextlib import AbstractContextManager, redirect_stderr, redirect_stdout, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
 from pathlib import Path, PurePosixPath
-from typing import Any, BinaryIO, Self
+from threading import Event, Thread
+from typing import Any, BinaryIO, Self, TextIO
 from uuid import uuid4
 """
 

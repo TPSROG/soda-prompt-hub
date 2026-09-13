@@ -9,10 +9,13 @@ from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from PIL import Image, ImageOps, UnidentifiedImageError
+
+if TYPE_CHECKING:
+    from prompt_hub.background_jobs import JobContext
 
 MAX_COMFY_IMAGE_BYTES = 50 * 1024 * 1024
 MAX_COMFY_IMAGE_PIXELS = 60_000_000
@@ -59,58 +62,103 @@ class ComfyResultStore:
         filename: str,
         source_path: str = "",
     ) -> dict[str, Any]:
-        inspected = inspect_comfy_image(raw, filename=filename)
-        digest = inspected["sha256"]
         with self._lock:
             index = self._read_index()
-            existing = next((item for item in index["items"] if item["sha256"] == digest), None)
-            if existing is not None:
-                return {"result": self._decorate(dict(existing)), "duplicate": True}
-            result_id = f"comfy-{uuid4().hex}"
-            suffix = inspected.pop("suffix")
-            original_name = f"{result_id}{suffix}"
-            thumbnail_name = f"{result_id}.webp"
-            (self.root / "original" / original_name).write_bytes(raw)
-            _write_thumbnail(raw, self.root / "thumbnail" / thumbnail_name)
-            item = {
-                **inspected,
-                "result_id": result_id,
-                "filename": Path(filename).name[:180] or original_name,
-                "source_path": source_path,
-                "original_name": original_name,
-                "thumbnail_name": thumbnail_name,
-                "disposition": "unreviewed",
-                "note": "",
-                "associations": [],
-                "created_at": _now(),
-                "updated_at": _now(),
-            }
-            index["items"].append(item)
-            self._write_index(index)
+            outcome = self._import_into_index(raw, filename, source_path, index)
+            if not outcome["duplicate"]:
+                self._write_index(index)
+            return outcome
+
+    def _import_into_index(
+        self,
+        raw: bytes,
+        filename: str,
+        source_path: str,
+        index: dict[str, Any],
+    ) -> dict[str, Any]:
+        digest = hashlib.sha256(raw).hexdigest()
+        existing = next((item for item in index["items"] if item["sha256"] == digest), None)
+        if existing is not None:
+            return {"result": self._decorate(dict(existing)), "duplicate": True}
+        inspected = inspect_comfy_image(raw, filename=filename)
+        result_id = f"comfy-{uuid4().hex}"
+        suffix = inspected.pop("suffix")
+        original_name = f"{result_id}{suffix}"
+        thumbnail_name = f"{result_id}.webp"
+        (self.root / "original" / original_name).write_bytes(raw)
+        _write_thumbnail(raw, self.root / "thumbnail" / thumbnail_name)
+        item = {
+            **inspected,
+            "result_id": result_id,
+            "filename": Path(filename).name[:180] or original_name,
+            "source_path": source_path,
+            "original_name": original_name,
+            "thumbnail_name": thumbnail_name,
+            "disposition": "unreviewed",
+            "note": "",
+            "associations": [],
+            "created_at": _now(),
+            "updated_at": _now(),
+        }
+        index["items"].append(item)
         return {"result": self._decorate(dict(item)), "duplicate": False}
 
-    def import_directory(self, source_path: Path | str) -> dict[str, Any]:
+    def scan_job(self, payload: Mapping[str, Any], context: JobContext) -> dict[str, Any]:
+        context.update(0, 0, "正在检查目录；取消会保留已经导入的图片")
+        report = self.import_directory(str(payload["source_path"]), context=context)
+        report.pop("results", None)
+        return report
+
+    def import_directory(
+        self,
+        source_path: Path | str,
+        *,
+        context: JobContext | None = None,
+    ) -> dict[str, Any]:
         source = _validate_directory(source_path, self.root)
-        paths = _collect_images(source)
-        if len(paths) > MAX_DIRECTORY_IMAGES:
-            raise ComfyResultError(f"目录图片超过 {MAX_DIRECTORY_IMAGES} 张，请拆分后导入")
+        paths = _collect_images(source, context=context)
         imported = 0
         duplicates = 0
         failed = []
         results = []
-        for path in paths:
-            try:
-                outcome = self.import_bytes(
-                    path.read_bytes(),
-                    filename=path.name,
-                    source_path=path.relative_to(source).as_posix(),
-                )
-            except (ComfyResultError, OSError) as error:
-                failed.append({"path": path.relative_to(source).as_posix(), "error": str(error)})
-                continue
-            results.append(outcome["result"])
-            duplicates += int(outcome["duplicate"])
-            imported += int(not outcome["duplicate"])
+        # Commit small batches, including partial batches on cancellation. Never hold
+        # the index lock for the entire directory or overwrite concurrent edits.
+        for offset in range(0, len(paths), 10):
+            with self._lock:
+                index = self._read_index()
+                initial_count = len(index["items"])
+                try:
+                    for position, path in enumerate(paths[offset : offset + 10], start=offset):
+                        relative = path.relative_to(source).as_posix()
+                        if context:
+                            context.update(
+                                position,
+                                len(paths),
+                                f"正在读取 {relative} · 新增 {imported} / 重复 {duplicates} / "
+                                f"失败 {len(failed)}",
+                            )
+                        try:
+                            if path.stat().st_size > MAX_COMFY_IMAGE_BYTES:
+                                raise ComfyResultError("图片超过 50 MiB 限制")
+                            outcome = self._import_into_index(
+                                path.read_bytes(),
+                                path.name,
+                                relative,
+                                index,
+                            )
+                        except (ComfyResultError, OSError) as error:
+                            failed.append({"path": relative, "error": str(error)})
+                            continue
+                        results.append(outcome["result"])
+                        duplicates += int(outcome["duplicate"])
+                        imported += int(not outcome["duplicate"])
+                finally:
+                    if len(index["items"]) != initial_count:
+                        self._write_index(index)
+        if context:
+            context.update(
+                len(paths), len(paths), f"新增 {imported} / 重复 {duplicates} / 失败 {len(failed)}"
+            )
         return {
             "source_path": str(source),
             "source_mode": "read-only",
@@ -437,11 +485,19 @@ def _validate_directory(source_path: Path | str, store_root: Path) -> Path:
     return source
 
 
-def _collect_images(source: Path) -> list[Path]:
+def _collect_images(source: Path, *, context: JobContext | None = None) -> list[Path]:
     paths = []
-    for directory, names, filenames in os.walk(source, followlinks=False):
+
+    def walk_error(error: OSError) -> None:
+        raise ComfyResultError(f"无法读取目录：{error}") from error
+
+    for directory, names, filenames in os.walk(source, followlinks=False, onerror=walk_error):
+        if context:
+            context.update(0, 0, f"正在发现图片：已找到 {len(paths)} 张；尚未开始导入")
         names[:] = sorted(name for name in names if not (Path(directory) / name).is_symlink())
         for filename in sorted(filenames):
+            if context:
+                context.raise_if_cancelled()
             path = Path(directory) / filename
             if not path.is_symlink() and path.suffix.casefold() in {
                 ".png",
@@ -450,6 +506,8 @@ def _collect_images(source: Path) -> list[Path]:
                 ".webp",
             }:
                 paths.append(path)
+                if len(paths) > MAX_DIRECTORY_IMAGES:
+                    raise ComfyResultError(f"目录图片超过 {MAX_DIRECTORY_IMAGES} 张，请拆分后导入")
     return paths
 
 

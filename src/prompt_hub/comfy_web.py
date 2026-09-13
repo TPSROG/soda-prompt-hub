@@ -22,6 +22,10 @@ COMFY_STYLES = r"""
   .comfy-button.signal { border-color: var(--signal); background: var(--signal); }
   .comfy-button:disabled { opacity: .45; cursor: not-allowed; }
   .comfy-status { min-height: 42px; margin: 0 0 14px; border-left: 5px solid var(--acid); background: #30351f; padding: 12px 15px; color: #f4eddf; font: 800 10px/1.6 monospace; }
+  .comfy-scan-status { margin-top: 12px; line-height: 1.6; font-size: 13px; overflow-wrap: anywhere; }
+  .comfy-scan-status progress { display: block; width: 100%; height: 14px; margin: 8px 0; accent-color: #586328; }
+  .comfy-scan-status [data-tone="error"] { color: #94321e; }
+  .comfy-scan-status small { display: block; color: var(--muted); }
   .comfy-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin: 28px 0 12px; color: var(--paper); }
   .comfy-head h2 { margin: 0; font: 900 30px Georgia, serif; }
   .comfy-head .section-label, .comfy-head label { color: #b9ae9f; }
@@ -55,7 +59,7 @@ COMFY_HTML = r"""
   </section>
   <section class="comfy-controls">
     <form class="comfy-panel" id="comfyFileForm"><h2>1. 导入一张图片</h2><label class="comfy-file" for="comfyFile">选择 PNG / JPEG / WebP<input id="comfyFile" type="file" accept="image/png,image/jpeg,image/webp" hidden></label><p id="comfyFileName">尚未选择图片</p><button class="comfy-button signal" type="submit">导入并读取生成参数</button></form>
-    <form class="comfy-panel" id="comfyDirectoryForm"><h2>或：扫描整个结果文件夹</h2><label>Mac 能看到的文件夹路径<input id="comfyDirectory" placeholder="/Volumes/ComfyUI/output"></label><p>可以填写 Finder 已挂载的 SMB 目录。系统只读取，不会移动、改名或覆盖 Windows 文件。</p><button class="comfy-button" type="submit">扫描这个文件夹</button></form>
+    <form class="comfy-panel" id="comfyDirectoryForm"><h2>或：扫描整个结果文件夹</h2><label>运行工作台的设备能访问的文件夹路径<input id="comfyDirectory" placeholder="例如 D:\ComfyUI\output，或 /Volumes/ComfyUI/output"></label><p>递归读取 PNG / JPEG / WebP，最多 2000 张。会复制图片到资料库、生成缩略图；不移动、改名或覆盖源文件。</p><button class="comfy-button" id="comfyScanStart" type="submit">扫描这个文件夹</button> <button class="comfy-button secondary" id="comfyScanCancel" type="button" hidden>取消扫描</button><div class="comfy-scan-status"><div id="comfyScanStatus" role="status" aria-live="polite">尚未开始扫描。</div><progress id="comfyScanProgress" aria-label="目录导入进度" hidden></progress><small id="comfyScanDetail">可切换页面；刷新后会恢复显示任务。取消会保留已导入图片。</small></div></form>
     <div class="comfy-panel"><h2>2. 选择它属于哪个项目</h2><label>创作项目<select id="comfyProject"><option value="">请选择项目</option></select></label><p>除了“记录为失败测试”，其他处理方式都需要先选择项目。</p><button class="comfy-button secondary" id="comfyRefresh" type="button">刷新结果列表</button></div>
   </section>
   <div class="comfy-status" id="comfyStatus">先导入图片，或扫描 Windows 的结果文件夹。</div>
@@ -67,7 +71,7 @@ COMFY_HTML = r"""
 COMFY_SCRIPT = r"""
 <script>
 (() => {
-  const state = {results: [], projects: []};
+  const state = {results: [], projects: [], scanJob: null, scanTimer: null, scanBusy: false};
   const labels = {unreviewed:'未审核', candidate:'数据集候选', failed_test:'失败测试', reference:'已关联'};
   const api = async (url, options={}) => { const response=await fetch(url,options); const payload=await response.json().catch(()=>({})); if(!response.ok) throw new Error(payload.detail||`请求失败：${response.status}`); return payload; };
   const jsonOptions = payload => ({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
@@ -95,7 +99,75 @@ COMFY_SCRIPT = r"""
   function status(message) { $('#comfyStatus').textContent=message; }
   async function load() { [state.results,state.projects]=await Promise.all([api('/api/comfy-results?limit=300'),api('/api/creative/projects?limit=100')]); const selected=$('#comfyProject').value; $('#comfyProject').innerHTML='<option value="">请选择项目</option>'+state.projects.map(item=>`<option value="${escapeHtml(item.project_id)}">第 ${item.lineage?.iteration||1} 版 · ${escapeHtml(item.title)}</option>`).join(''); if(state.projects.some(item=>item.project_id===selected)) $('#comfyProject').value=selected; render(); }
   async function importFile(event) { event.preventDefault(); const file=$('#comfyFile').files[0]; if(!file) return status('请先选择一张图片。'); status(`正在读取 ${file.name}…`); const outcome=await api('/api/comfy-results/import?filename='+encodeURIComponent(file.name),{method:'POST',headers:{'Content-Type':file.type||'application/octet-stream'},body:file}); await load(); status(outcome.duplicate?'这张图已经在回流库中，未重复建立记录。':`已导入 ${file.name}；请核对参数并选择处理方式。`); }
-  async function importDirectory(event) { event.preventDefault(); const path=$('#comfyDirectory').value.trim(); if(!path) return status('请填写 ComfyUI 输出目录或 SMB 挂载目录。'); status('正在只读扫描目录…'); const report=await api('/api/comfy-results/import-directory',jsonOptions({source_path:path})); await load(); status(`扫描 ${report.scanned} 张：新增 ${report.imported}，重复 ${report.duplicates}，失败 ${report.failed.length}。源目录未修改。`); }
+  const scanApi = (url, options={}) => api(url, {...options, signal:AbortSignal.timeout(15000)});
+  function scanControls(busy) {
+    state.scanBusy=busy;
+    $('#comfyScanStart').disabled=busy;
+    $('#comfyScanStart').textContent=busy?'扫描任务进行中…':'扫描这个文件夹';
+    $('#comfyDirectory').readOnly=busy;
+    $('#comfyScanCancel').hidden=!busy||!state.scanJob;
+    $('#comfyDirectoryForm').setAttribute('aria-busy',String(busy));
+  }
+  function renderScan(job) {
+    state.scanJob=job;
+    const busy=['queued','running'].includes(job.status), bar=$('#comfyScanProgress');
+    scanControls(busy);
+    $('#comfyScanCancel').disabled=Boolean(job.cancel_requested);
+    $('#comfyScanCancel').textContent=job.cancel_requested?'正在取消…':'取消扫描';
+    bar.hidden=!busy;
+    if(job.progress_total>0) { bar.max=job.progress_total; bar.value=job.progress_current; }
+    else bar.removeAttribute('value');
+    let message=job.progress_message||'正在准备扫描';
+    if(job.status==='queued') message='已进入后台队列，等待前面的任务结束。';
+    if(job.status==='running'&&job.progress_total) message=`已处理 ${job.progress_current} / ${job.progress_total} 张 · ${message}`;
+    if(job.cancel_requested&&busy) message='已请求取消；当前文件处理结束后停止，已导入图片保留。';
+    if(job.status==='completed') {
+      const r=job.result;
+      message=`扫描完成：${r.scanned} 张，新增 ${r.imported}，重复 ${r.duplicates}，失败 ${(r.failed||[]).length}。`;
+      if(r.failed?.length) message+=' '+r.failed.slice(0,3).map(item=>`${item.path}：${item.error}`).join('；');
+    }
+    if(job.status==='failed') message=`扫描失败：${job.error}。已导入的图片保留，排除问题后可重新扫描。`;
+    if(job.status==='canceled') message='扫描已取消；已导入的图片保留，再次扫描会跳过重复图片。';
+    $('#comfyScanStatus').textContent=message;
+    $('#comfyScanStatus').dataset.tone=job.status==='failed'?'error':'';
+    $('#comfyScanDetail').textContent=`目录：${job.payload.source_path} · ${job.job_id} · 状态确认于 ${new Date().toLocaleTimeString()}`;
+    return busy;
+  }
+  function scheduleScanPoll() {
+    clearTimeout(state.scanTimer);
+    state.scanTimer=setTimeout(()=>refreshScan().catch(showScanConnectionError),1000);
+  }
+  function showScanConnectionError(error) {
+    $('#comfyScanStatus').textContent=`暂时无法确认扫描状态：${error.message}。后台可能仍在处理，请勿重复提交；正在重连…`;
+    $('#comfyScanStatus').dataset.tone='error';
+    scanControls(true);
+    clearTimeout(state.scanTimer);
+    state.scanTimer=setTimeout(()=>refreshScan().catch(showScanConnectionError),3000);
+  }
+  async function refreshScan() {
+    clearTimeout(state.scanTimer);
+    const job=await scanApi('/api/comfy-results/scan-jobs/latest');
+    if(!job) { state.scanJob=null; scanControls(false); $('#comfyScanStatus').textContent='尚未开始扫描。'; return; }
+    const previous=state.scanJob;
+    if(renderScan(job)) scheduleScanPoll();
+    else if(!previous||previous.status!==job.status) {
+      load().catch(error=>status(`扫描状态已更新，但结果列表刷新失败：${error.message}`));
+    }
+  }
+  async function importDirectory(event) {
+    event.preventDefault(); if(state.scanBusy) return;
+    const path=$('#comfyDirectory').value.trim();
+    if(!path) { $('#comfyScanStatus').textContent='请填写结果文件夹路径。'; $('#comfyDirectory').focus(); return; }
+    scanControls(true); $('#comfyScanStatus').textContent='正在提交后台扫描任务…';
+    try { const job=await scanApi('/api/comfy-results/scan-jobs',jsonOptions({source_path:path})); renderScan(job); scheduleScanPoll(); }
+    catch(error) { showScanConnectionError(error); }
+  }
+  async function cancelScan() {
+    if(!state.scanJob) return;
+    $('#comfyScanCancel').disabled=true;
+    try { renderScan(await scanApi(`/api/jobs/${encodeURIComponent(state.scanJob.job_id)}/cancel`,{method:'POST'})); scheduleScanPoll(); }
+    catch(error) { showScanConnectionError(error); }
+  }
   async function act(resultId, action) { const projectId=$('#comfyProject').value; if(action!=='failed'&&!projectId) return status('请先在上方选择这张图所属的创作项目。'); if(action==='failed') { await api(`/api/comfy-results/${encodeURIComponent(resultId)}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({disposition:'failed_test'})}); status('已记录为失败测试；图片没有进入任何训练集。'); }
     else if(action==='branch') { const child=await api(`/api/comfy-results/${encodeURIComponent(resultId)}/branch/${encodeURIComponent(projectId)}`,{method:'POST'}); status(`已建立 ${child.title}；来源工作流和参数已经保存在版本记录中。`); }
     else { const endpoint=action==='candidate'?'candidate':'attach'; await api(`/api/comfy-results/${encodeURIComponent(resultId)}/${endpoint}/${encodeURIComponent(projectId)}`,{method:'POST'}); status(action==='candidate'?'已关联并加入数据集候选；仍需在创作台确认图片说明。':'已关联项目；图片尚未进入数据集。'); }
@@ -103,10 +175,11 @@ COMFY_SCRIPT = r"""
   $('#comfyFile').addEventListener('change',event=>{ const file=event.target.files[0]; $('#comfyFileName').textContent=file?`${file.name} · ${(file.size/1024/1024).toFixed(2)} MiB`:'尚未选择图片'; });
   $('#comfyFileForm').addEventListener('submit',event=>importFile(event).catch(error=>status(error.message)));
   $('#comfyDirectoryForm').addEventListener('submit',event=>importDirectory(event).catch(error=>status(error.message)));
+  $('#comfyScanCancel').addEventListener('click',cancelScan);
   $('#comfyRefresh').addEventListener('click',()=>load().then(()=>status('结果列表已刷新。')).catch(error=>status(error.message)));
   $('#comfyFilter').addEventListener('change',render);
   $('#comfyGrid').addEventListener('click',event=>{ const button=event.target.closest('[data-comfy-action]'); if(!button) return; const card=button.closest('[data-comfy-result]'); button.disabled=true; act(card.dataset.comfyResult,button.dataset.comfyAction).catch(error=>status(error.message)).finally(()=>button.disabled=false); });
-  window.ensureComfyResults=load;
+  window.ensureComfyResults=async()=>{ refreshScan().catch(showScanConnectionError); await load(); };
 })();
 </script>
 """

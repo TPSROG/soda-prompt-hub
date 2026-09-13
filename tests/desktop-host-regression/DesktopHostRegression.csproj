@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../deploy/windows-desktop/SodaPromptHub/DesktopHost.cs" Link="DesktopHost.cs" />
+    <Compile Include="../../deploy/windows-desktop/SodaPromptHub/GitRuntime.cs" Link="GitRuntime.cs" />
+    <Compile Include="../../deploy/windows-shell/SodaComputeWorker/WorkerHost.cs" Link="WorkerHost.cs" />
+    <Compile Include="../../deploy/windows-shell/SodaComputeWorker/DiagnosticBundle.cs" Link="DiagnosticBundle.cs" />
+  </ItemGroup>
+</Project>

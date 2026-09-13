@@ -13,6 +13,7 @@ URL="http://${HOST}:${PORT}/"
 
 # Finder 启动的 Terminal 未必带上 uv 所在目录
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+export ORT_DISABLE_TELEMETRY="${ORT_DISABLE_TELEMETRY:-1}"
 
 # 双击运行时窗口会停在这里等一下按键；非交互执行则直接返回
 pause_before_close() {

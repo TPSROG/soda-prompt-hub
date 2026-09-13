@@ -11,6 +11,7 @@
     const tagLabelCache = new Map();
     let homeMissingSources = [];
     const sourceSetupSkipKey = 'soda-prompt-hub-source-setup-skipped';
+    const sourceSyncUi = {busy:false,rebuilding:false,sources:[],jobs:[],job:null,loadSerial:0,localMessage:false,epoch:0};
     const viewLabels = {home:'首页', creative:'创作台', prompts:'提示词库', discover:'智能检索', characters:'角色库', datasets:'数据集', lora:'LoRA 项目', comfy:'Windows 出图', management:'资料管理', remote:'设备连接'};
 
     function setPromptHubDeviceName(value) {
@@ -37,17 +38,47 @@
       return item.zh ? `${item.zh} (${item.en})` : item.en;
     }
 
-    async function ensureTagLabels(tags) {
+    async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 15000) {
+      const controller = new AbortController();
+      const abort = () => controller.abort(options.signal?.reason);
+      if (options.signal?.aborted) abort();
+      else options.signal?.addEventListener('abort', abort, {once:true});
+      const timer = setTimeout(() => controller.abort(new Error('请求超时，请重试')), timeoutMs);
+      try {
+        const response = await fetch(url, {...options, signal:controller.signal});
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || `请求失败：${response.status}`);
+        return payload;
+      } finally {
+        clearTimeout(timer);
+        options.signal?.removeEventListener('abort', abort);
+      }
+    }
+    window.fetchJsonWithTimeout = fetchJsonWithTimeout;
+
+    async function ensureTagLabels(tags, options = {}) {
       const values = tags.map(value => String(value || '').trim()).filter(Boolean);
       const canonicalPattern = /^[A-Za-z0-9][A-Za-z0-9_()'./:+\- ]*$/;
-      const missing = [...new Set(values)].filter(value => canonicalPattern.test(value) && !tagLabelCache.has(value.toLowerCase()));
+      const unique = [...new Map(values.map(value => [value.toLowerCase(),value])).values()];
+      const missing = unique.filter(value => canonicalPattern.test(value) && (options.retryUnknown ? !tagLabelCache.get(value.toLowerCase())?.zh : !tagLabelCache.has(value.toLowerCase())));
+      const progress = {processed:0,total:missing.length,translated:0,untranslated:0};
+      options.onProgress?.({...progress});
       if (!missing.length) return false;
+      const batchSize = Math.max(1,Math.min(500,options.batchSize || 500));
       let changed = false;
-      for (let index = 0; index < missing.length; index += 500) {
-        const response = await fetch('/api/tags/localize', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tags:missing.slice(index,index+500), language:'zh'})});
-        if (!response.ok) continue;
-        const payload = await response.json();
-        (payload.items || []).forEach(item => tagLabelCache.set(String(item.en).toLowerCase(), item));
+      for (let index = 0; index < missing.length; index += batchSize) {
+        if (options.signal?.aborted) throw options.signal.reason || new Error('已停止');
+        const batch = missing.slice(index,index+batchSize);
+        const payload = await fetchJsonWithTimeout('/api/tags/localize', {method:'POST', signal:options.signal, headers:{'Content-Type':'application/json'}, body:JSON.stringify({tags:batch, language:'zh',allow_model:options.allowModel !== false})},options.timeoutMs || 65000);
+        (payload.items || []).forEach(item => {
+          const key = String(item.en).toLowerCase();
+          if (item.zh || !tagLabelCache.get(key)?.zh) tagLabelCache.set(key,item);
+        });
+        const translated = batch.filter(tag => tagLabelCache.get(tag.toLowerCase())?.zh).length;
+        progress.processed += batch.length;
+        progress.translated += translated;
+        progress.untranslated += batch.length-translated;
+        options.onProgress?.({...progress});
         changed = true;
       }
       return changed;
@@ -238,20 +269,82 @@
       $('#homeSourceSetupDescription').textContent = homeMissingSources.some(item => item.source_id === 'kisegaeningyou') ? `还缺 ${homeMissingSources.length} 个推荐资料库。其中视觉参照库图片较多，第一次下载可能需要几分钟。` : `还缺 ${homeMissingSources.length} 个推荐资料库，安装后会自动建立本地检索索引。`;
     }
 
-    async function loadSourceSyncStatus() {
-      const labels = {ready:'可以安全更新',dirty:'有本地改动',no_upstream:'没有上游',missing:'本地缺失',not_git:'不是 Git 仓库',cloned:'已拉取',failed:'检查失败'};
-      const response = await fetch('/api/sources/sync-status');
-      const sources = response.ok ? await response.json() : [];
-      renderHomeSourceSetup(sources);
-      $('#sourceSyncList').innerHTML = sources.map(item => {
-        const action = item.status === 'missing' ? `<button class="source-sync-fetch" data-clone-source="${escapeHtml(item.source_id)}" title="从 ${escapeHtml(item.url)} 拉取到本地">拉取</button>` : '';
-        return `<div class="source-sync-row"><strong>${escapeHtml(item.name)}</strong><span class="source-sync-status"><span class="source-sync-state ${escapeHtml(item.status)}">${escapeHtml(labels[item.status] || item.status)}</span>${action}</span><code>${escapeHtml(item.branch || '—')} · ${escapeHtml((item.before || '').slice(0, 10) || '暂无版本')}</code></div>`;
+    function sourceJobActive(job = sourceSyncUi.job) { return ['queued','running'].includes(job?.status); }
+
+    function lockSourceActions() {
+      const locked = sourceSyncUi.busy || sourceSyncUi.rebuilding || sourceJobActive();
+      document.querySelectorAll('#sourceSyncButton, #importButton, #homeSourceInstall, [data-clone-source], [data-update-source]').forEach(button => { button.disabled = locked; });
+    }
+
+    function sourceSyncResultMessage(result) {
+      const sources = result.sources || [];
+      const missing = result.missing ?? sources.filter(item => item.status === 'missing').length;
+      const failed = result.failed ?? sources.filter(item => item.status === 'failed').length;
+      let message = `检查结束：${result.updated || 0} 个已更新，${result.unchanged || 0} 个已是最新，${result.cloned || 0} 个新安装，${missing} 个未安装，${result.skipped || 0} 个已跳过，${failed} 个失败。`;
+      if (missing) message += ' 未安装的资料库需单独“拉取”。';
+      if (result.index_failed?.length) message += ` ${result.index_failed.length} 个资料库索引失败，详见下方原因。`;
+      return message;
+    }
+
+    function renderSourceJob(job) {
+      if (!job) return;
+      sourceSyncUi.job = job;
+      const active = sourceJobActive(job), bar = $('#sourceSyncProgress');
+      bar.hidden = !active;
+      bar.max = Math.max(Number(job.progress_total) || 1,1);
+      bar.value = Math.min(Number(job.progress_current) || 0,bar.max);
+      $('#sourceSyncResume').hidden = true;
+      const stamp = job.finished_at || job.updated_at || job.created_at;
+      const time = stamp ? new Date(stamp).toLocaleString() : '';
+      const elapsed = job.started_at ? Math.max(0,Math.floor((Date.now()-Date.parse(job.started_at))/1000)) : 0;
+      const message = active ? `${job.progress_message || '等待任务执行…'} · 已完成 ${job.progress_current || 0}/${job.progress_total || '?'} 步${elapsed ? ` · 已用时 ${elapsed} 秒` : ''}（步骤进度，不是下载字节百分比）` : job.status === 'completed' ? `${sourceSyncResultMessage(job.result || {})} ${time}` : `任务${job.status === 'canceled' ? '已取消' : '失败'}：${job.error || job.progress_message || '请重试'} ${time}`;
+      $('#sourceSyncMessage').textContent = message;
+      $('#sourceSyncMessage').dataset.tone = active ? 'busy' : job.status !== 'completed' || job.result?.failed || job.result?.index_failed?.length ? 'error' : 'success';
+      const results = job.result?.sources || [];
+      const labels = {updated:'已更新',unchanged:'已是最新',cloned:'已安装',missing:'尚未安装',failed:'更新失败',skipped_dirty:'本地有修改，已跳过',skipped_no_upstream:'没有上游，已跳过',not_git:'不是 Git 仓库，已跳过'};
+      $('#sourceSyncDetails').innerHTML = results.length ? `<details open><summary>本次各资料库结果 · ${results.length} 个</summary><ul>${results.map(item => `<li><strong>${escapeHtml(item.name || item.source_id)}</strong>：${escapeHtml(labels[item.status] || item.status)}${item.message ? ` — ${escapeHtml(item.message)}` : ''}</li>`).join('')}${(job.result?.index_failed || []).map(item => `<li><strong>${escapeHtml(item.name || item.source_id)}</strong>：索引失败 — ${escapeHtml(item.message)}</li>`).join('')}</ul></details>` : '';
+      lockSourceActions();
+    }
+
+    function renderSourceRows() {
+      const labels = {ready:'可检查更新（尚未联网）',dirty:'本地有修改，禁止覆盖',no_upstream:'没有上游',missing:'尚未安装',not_git:'不是 Git 仓库',failed:'本地检查失败'};
+      const history = new Map();
+      sourceSyncUi.jobs.forEach(job => (job.result?.sources || []).forEach(item => { if(!history.has(item.source_id)) history.set(item.source_id,{...item,time:job.finished_at || job.updated_at}); }));
+      const resultLabels = {updated:'已更新',unchanged:'已是最新',cloned:'已安装',failed:'更新失败',missing:'尚未安装',skipped_dirty:'有本地修改，已跳过',skipped_no_upstream:'没有上游，已跳过',not_git:'不是 Git 仓库，已跳过'};
+      $('#sourceSyncList').innerHTML = sourceSyncUi.sources.map(item => {
+        const last = history.get(item.source_id);
+        const action = item.status === 'missing' ? `<button class="source-sync-fetch" data-clone-source="${escapeHtml(item.source_id)}">拉取</button>` : item.status === 'ready' ? `<button class="source-sync-fetch" data-update-source="${escapeHtml(item.source_id)}">${last?.status === 'failed' ? '重试更新' : '检查并更新'}</button>` : '';
+        const previous = last ? `<small>上次操作：${escapeHtml(resultLabels[last.status] || last.status)} · ${escapeHtml(new Date(last.time).toLocaleString())}</small>` : '<small>尚无更新记录</small>';
+        return `<div class="source-sync-row"><div><strong>${escapeHtml(item.name)}</strong>${previous}</div><span class="source-sync-status"><span class="source-sync-state ${escapeHtml(item.status)}">${escapeHtml(labels[item.status] || item.status)}</span>${action}</span><code>${escapeHtml(item.branch || '—')} · ${escapeHtml((item.before || '').slice(0,10) || '暂无版本')}${item.message ? `<br>${escapeHtml(item.message)}` : ''}</code></div>`;
       }).join('');
-      $('#sourceSyncList').querySelectorAll('[data-clone-source]').forEach(button => button.addEventListener('click', () => cloneSource(button.dataset.cloneSource, button)));
-      const dirty = sources.filter(item => item.status === 'dirty').length;
-      const ready = sources.filter(item => item.status === 'ready').length;
-      const missing = sources.filter(item => item.status === 'missing').length;
-      $('#sourceSyncMessage').textContent = missing ? `${missing} 个预设资料源尚未拉取到本机，点状态旁的“拉取”即可下载；其余 ${ready} 个可以安全更新。` : dirty ? `${dirty} 个资料源有本地改动，会自动跳过；其余 ${ready} 个可以安全更新。` : `${ready} 个资料源可以安全检查更新；只允许 fast-forward，不会覆盖本地修改。`;
+      $('#sourceSyncList').querySelectorAll('[data-clone-source]').forEach(button => button.addEventListener('click',() => cloneSource(button.dataset.cloneSource,button)));
+      $('#sourceSyncList').querySelectorAll('[data-update-source]').forEach(button => button.addEventListener('click',() => syncPublicSources(button.dataset.updateSource,button)));
+      lockSourceActions();
+    }
+
+    async function loadSourceSyncStatus() {
+      const serial = ++sourceSyncUi.loadSerial;
+      const epoch = sourceSyncUi.epoch;
+      $('#sourceSyncRefresh').disabled = true;
+      try {
+        const [sources,jobs] = await Promise.all([fetchJsonWithTimeout('/api/sources/sync-status',{},30000),fetchJsonWithTimeout('/api/sources/sync-jobs')]);
+        if(serial !== sourceSyncUi.loadSerial || epoch !== sourceSyncUi.epoch) return;
+        sourceSyncUi.sources = sources; sourceSyncUi.jobs = jobs;
+        renderHomeSourceSetup(sources);
+        renderSourceRows();
+        const count = status => sources.filter(item => item.status === status).length;
+        $('#sourceSyncSummary').textContent = `本地状态：${count('ready')} 个可检查更新，${count('missing')} 个尚未安装，${count('dirty')} 个有本地修改。此状态检查不联网，不代表上游有新版本。`;
+        if(!sourceSyncUi.busy && !sourceSyncUi.rebuilding && !sourceSyncUi.localMessage) {
+          sourceSyncUi.job = jobs.find(sourceJobActive) || jobs[0] || null;
+          renderSourceJob(sourceSyncUi.job);
+          if(sourceJobActive()) resumeSourceSync();
+        }
+      } catch(error) {
+        $('#sourceSyncSummary').textContent = `无法读取资料库状态：${error.message}。可点击“刷新状态”重试；现有操作结果保留。`;
+      } finally {
+        if(serial === sourceSyncUi.loadSerial) $('#sourceSyncRefresh').disabled = false;
+        lockSourceActions();
+      }
     }
 
     async function loadOcWorlds() {
@@ -434,8 +527,17 @@
     }
 
     async function rebuild() {
+      if(sourceSyncUi.busy || sourceSyncUi.rebuilding || sourceJobActive()) return;
+      sourceSyncUi.rebuilding = true;
+      sourceSyncUi.epoch++;
+      sourceSyncUi.localMessage = true;
+      lockSourceActions();
       const button = $('#importButton');
       const sourceMessage = $('#sourceSyncMessage');
+      $('#sourceSyncDetails').innerHTML = '';
+      $('#sourceSyncProgress').hidden = false;
+      $('#sourceSyncProgress').removeAttribute('value');
+      sourceMessage.dataset.tone = 'busy';
       button.disabled = true;
       button.textContent = '正在重建索引…';
       sourceMessage.textContent = '正在重建本地索引…';
@@ -443,8 +545,7 @@
         const response = await fetch('/api/import', {method: 'POST'});
         const result = await response.json();
         if (!response.ok) throw new Error(result.detail || `请求失败：${response.status}`);
-        await loadStats();
-        await searchPrompts();
+        await refreshSourceViews({search:true});
         const failed = result.failed || [], skipped = result.skipped || [];
         const rebuilt = Object.keys(result.sources || {}).length;
         let message = `索引已更新，共 ${formatNumber(result.stats.entries)} 条资料`;
@@ -452,30 +553,88 @@
         if (skipped.length) message += `；${skipped.length} 个来源的本地目录不存在（${skipped.map(item => item.name).join('、')}）`;
         if (failed.length) message += `；${failed.length} 个来源本次失败：${failed.map(item => `${item.name} — ${item.message}`).join('；')}`;
         sourceMessage.textContent = message;
+        sourceMessage.dataset.tone = failed.length ? 'error' : 'success';
         $('#status').textContent = message;
       } catch (error) {
         sourceMessage.textContent = `重建失败：${error.message}`;
+        sourceMessage.dataset.tone = 'error';
         $('#status').textContent = `重建失败：${error.message}`;
       } finally {
         button.disabled = false;
         button.textContent = '仅重建本地索引';
+        sourceSyncUi.rebuilding = false;
+        $('#sourceSyncProgress').hidden = true;
+        lockSourceActions();
       }
     }
 
-    async function runSourceSyncJob(body, onProgress = () => {}) {
-      const response = await fetch('/api/sources/sync', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.detail || `启动更新失败：${response.status}`);
-      let job = payload.job;
-      while (['queued','running'].includes(job.status)) {
-        $('#sourceSyncMessage').textContent = job.progress_message || '等待资料更新任务…';
+    function sourceSyncError(error) {
+      $('#sourceSyncMessage').dataset.tone = 'error';
+      const continuing = sourceJobActive();
+      $('#sourceSyncMessage').textContent = `${continuing ? '进度连接中断' : '操作未完成'}：${error.message}。${continuing ? '后台任务可能仍在运行，请重新连接进度，不要重复提交。' : '若请求已发出，请先刷新状态确认任务结果，再决定是否重试。'}`;
+      $('#sourceSyncResume').hidden = !continuing;
+      $('#sourceSyncProgress').hidden = true;
+    }
+
+    async function followSourceSyncJob(initialJob, onProgress = () => {}) {
+      let job = initialJob;
+      for (;;) {
+        if(!job?.job_id || !['queued','running','completed','failed','canceled'].includes(job.status)) throw new Error('服务返回了无法识别的任务状态');
+        renderSourceJob(job);
         onProgress(job);
-        await new Promise(resolve => setTimeout(resolve, 500));
-        job = await fetch(`/api/jobs/${encodeURIComponent(job.job_id)}`).then(result => result.json());
+        if(!sourceJobActive(job)) break;
+        await new Promise(resolve => setTimeout(resolve,500));
+        job = await fetchJsonWithTimeout(`/api/jobs/${encodeURIComponent(job.job_id)}`);
       }
-      onProgress(job);
-      if (job.status !== 'completed') throw new Error(job.error || `资料更新${job.status}`);
+      if(job.status !== 'completed') throw new Error(job.error || `资料更新${job.status === 'canceled' ? '已取消' : '失败'}`);
       return job.result || {};
+    }
+
+    async function runSourceSyncJob(body, onProgress = () => {}) {
+      if(sourceSyncUi.busy || sourceSyncUi.rebuilding || sourceJobActive()) throw new Error('已有资料任务正在执行，请等待当前任务结束');
+      sourceSyncUi.busy = true;
+      sourceSyncUi.epoch++;
+      sourceSyncUi.localMessage = false;
+      lockSourceActions();
+      $('#sourceSyncMessage').textContent = '正在建立更新任务…';
+      $('#sourceSyncMessage').dataset.tone = 'busy';
+      $('#sourceSyncDetails').innerHTML = '';
+      $('#sourceSyncProgress').hidden = false;
+      $('#sourceSyncProgress').removeAttribute('value');
+      try {
+        const payload = await fetchJsonWithTimeout('/api/sources/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        return await followSourceSyncJob(payload.job,onProgress);
+      } catch(error) {
+        sourceSyncError(error);
+        throw error;
+      } finally {
+        sourceSyncUi.busy = false;
+        lockSourceActions();
+      }
+    }
+
+    async function resumeSourceSync() {
+      if(sourceSyncUi.busy || sourceSyncUi.rebuilding || !sourceJobActive()) return;
+      sourceSyncUi.busy = true;
+      sourceSyncUi.epoch++;
+      sourceSyncUi.localMessage = false;
+      lockSourceActions();
+      try {
+        await followSourceSyncJob(sourceSyncUi.job);
+      } catch(error) {
+        sourceSyncError(error);
+      } finally {
+        sourceSyncUi.busy = false;
+        lockSourceActions();
+      }
+      if(!sourceJobActive()) await loadSourceSyncStatus();
+    }
+
+    async function refreshSourceViews({search = false} = {}) {
+      const updates = [loadStats(),loadSourceSyncStatus()];
+      if(search) updates.push(searchPrompts());
+      const results = await Promise.allSettled(updates);
+      if(results.some(item => item.status === 'rejected')) $('#sourceSyncSummary').textContent = '任务结果已保留，但部分统计或搜索结果未能刷新。请稍后刷新状态，不必重复更新资料库。';
     }
 
     async function installRecommendedSources() {
@@ -496,8 +655,8 @@
           bar.value = Math.min(Number(job.progress_current) || 0, bar.max);
           message.textContent = job.progress_message || '正在准备资料…';
         });
-        await Promise.all([loadStats(), loadSourceSyncStatus(), searchPrompts()]);
-        const failed = (result.sources || []).filter(item => item.status === 'failed');
+        await refreshSourceViews({search:true});
+        const failed = [...(result.sources || []).filter(item => item.status === 'failed'),...(result.index_failed || [])];
         if (failed.length) {
           message.textContent = `${failed.length} 个资料库没有安装成功：${failed.map(item => item.name).join('、')}。可以稍后重试。`;
         } else {
@@ -509,6 +668,7 @@
         button.disabled = false;
         skip.disabled = false;
         button.textContent = '安装推荐资料库';
+        lockSourceActions();
       }
     }
 
@@ -518,36 +678,40 @@
       $('#homeSourceSetup').hidden = true;
     }
 
-    async function syncPublicSources() {
-      const button = $('#sourceSyncButton');
+    async function syncPublicSources(sourceId = '', button = $('#sourceSyncButton')) {
+      const label = button.textContent;
       button.disabled = true;
       button.textContent = '正在检查资料源…';
       try {
-        const result = await runSourceSyncJob({source_ids: [], clone_missing: false});
-        $('#sourceSyncMessage').textContent = `更新完成：${result.updated || 0} 个有新版本，${result.unchanged || 0} 个已是最新，${result.skipped || 0} 个已安全跳过。`;
-        await Promise.all([loadStats(), loadSourceSyncStatus()]);
+        const result = await runSourceSyncJob({source_ids: sourceId ? [sourceId] : [], clone_missing: false});
+        const epoch = sourceSyncUi.epoch;
+        await refreshSourceViews();
+        if(epoch === sourceSyncUi.epoch) $('#sourceSyncMessage').textContent = sourceSyncResultMessage(result);
       } catch (error) {
-        $('#sourceSyncMessage').textContent = error.message;
+        sourceSyncError(error);
       } finally {
         button.disabled = false;
-        button.textContent = '↻ 更新公共提示词库';
+        button.textContent = label;
+        lockSourceActions();
       }
     }
 
     async function cloneSource(sourceId, button) {
+      const source = sourceSyncUi.sources.find(item => item.source_id === sourceId);
+      if(!confirm(`拉取 ${source?.name || sourceId} 到本机并建立索引？${source?.source_id === 'kisegaeningyou' ? '该资料库含较多图片，可能需要几分钟。' : ''}\n许可证：${sourceLicenseLabel(source?.license || 'unknown')}。不会覆盖已有非空目录。`)) return;
       button.disabled = true;
       button.textContent = '拉取中';
       try {
         const result = await runSourceSyncJob({source_ids: [sourceId], clone_missing: true});
-        const detail = (result.sources || []).find(item => item.source_id === sourceId) || {};
-        if (detail.status === 'failed') throw new Error(detail.message || '拉取失败');
-        const indexed = (result.entry_counts || {})[sourceId];
-        $('#sourceSyncMessage').textContent = `${detail.name || sourceId} 已拉取到本地${indexed ? `，索引 ${formatNumber(indexed)} 条资料` : ''}。`;
-        await Promise.all([loadStats(), loadSourceSyncStatus(), searchPrompts()]);
+        const epoch = sourceSyncUi.epoch;
+        await refreshSourceViews({search:true});
+        if(epoch === sourceSyncUi.epoch) $('#sourceSyncMessage').textContent = sourceSyncResultMessage(result);
       } catch (error) {
-        $('#sourceSyncMessage').textContent = error.message;
+        sourceSyncError(error);
+      } finally {
         button.disabled = false;
         button.textContent = '拉取';
+        lockSourceActions();
       }
     }
 
@@ -635,9 +799,14 @@
       try { await saveMark(item); } catch (error) { $('#status').textContent = '保存失败，请重试'; console.error(error); await searchPrompts(); }
     });
     $('#importButton').addEventListener('click', rebuild);
-    $('#sourceSyncButton').addEventListener('click', syncPublicSources);
+    $('#sourceSyncButton').addEventListener('click', () => syncPublicSources());
+    $('#sourceSyncRefresh').addEventListener('click', () => loadSourceSyncStatus());
+    $('#sourceSyncResume').addEventListener('click', resumeSourceSync);
     $('#homeSourceInstall').addEventListener('click', installRecommendedSources);
     $('#homeSourceSkip').addEventListener('click', skipRecommendedSources);
     window.loadPromptHubStats = loadStats;
+    if (new URLSearchParams(window.location.search).get('view') === 'remote') {
+      window.addEventListener('load', () => setView('remote').catch(console.error), {once: true});
+    }
     $('#tagLanguageToggle').addEventListener('click', window.toggleTagDisplayLanguage);
     Promise.all([loadStats(), loadOcWorlds(), loadSourceSyncStatus(), searchPrompts()]).catch(error => { $('#status').textContent = '读取失败，请刷新页面'; console.error(error); });

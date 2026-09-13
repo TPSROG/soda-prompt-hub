@@ -12,7 +12,11 @@ def test_public_document_layers_exist_and_readme_routes_users() -> None:
         "WORKFLOWS.md",
         "MAC_GUIDE.md",
         "WINDOWS_WORKER.md",
+        "OPTIONAL_MODELS.md",
+        "DESKTOP_PRODUCT_PLAN.md",
+        "DESKTOP_UI_SPEC.md",
         "ARCHITECTURE.md",
+        "COMMERCIAL_RELEASE.md",
         "TROUBLESHOOTING.md",
         "RELEASES.md",
     }
@@ -28,7 +32,7 @@ def test_local_markdown_links_resolve() -> None:
     repository = Path(__file__).resolve().parents[1]
     missing: list[str] = []
     for source in repository.rglob("*.md"):
-        if any(part in {".git", ".venv"} for part in source.parts):
+        if any(part in {".git", ".venv", "bin", "obj", "dist"} for part in source.parts):
             continue
         for target in re.findall(r"\[[^]]*\]\(([^)]+)\)", source.read_text(encoding="utf-8")):
             normalized = target.strip().strip("<>")

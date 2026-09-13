@@ -5,7 +5,9 @@ import argparse
 import json
 import os
 import sys
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from typing import TextIO
 
 from prompt_hub.windows_worker_core import ComfyUIClient, WindowsWorker, WorkerLock
 from prompt_hub.windows_worker_support import (
@@ -61,11 +63,28 @@ def build_parser() -> argparse.ArgumentParser:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--self-test", action="store_true")
     mode.add_argument("--once", action="store_true")
+    parser.add_argument("--log-file", help="append stdout and stderr to this UTF-8 log")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.log_file:
+        try:
+            log_path = Path(args.log_file).resolve()
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with log_path.open("a", encoding="utf-8", buffering=1) as log:
+                return _run(args, log)
+        except OSError as error:
+            print(f"worker 日志无法打开：{error}", file=sys.stderr, flush=True)
+            return 2
+    return _run(args)
+
+
+def _run(args: argparse.Namespace, log: TextIO | None = None) -> int:
+    if log is not None:
+        with redirect_stdout(log), redirect_stderr(log):
+            return _run(args)
     try:
         config = WorkerConfig.load(Path(args.config).resolve())
         worker = WindowsWorker(config)

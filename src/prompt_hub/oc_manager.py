@@ -110,6 +110,153 @@ def lore_search_text(lore: Mapping[str, Any]) -> str:
     return "\n".join(_text_values(lore.values()))
 
 
+def build_oc_creative_seed(
+    character: Mapping[str, Any],
+    *,
+    prompts: Iterable[Mapping[str, Any]] | None = None,
+    lore: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Normalize an OC Manager character into choices for the creative workspace."""
+    character_id = _clean_text(character.get("id"))
+    name = _clean_text(character.get("name"))
+    appearance_value = character.get("appearance")
+    appearance = appearance_value if isinstance(appearance_value, Mapping) else {}
+    basic_parts = [
+        name,
+        _clean_text(character.get("gender")),
+        _age_text(character.get("age")),
+        _clean_text(character.get("race")),
+        _clean_text(character.get("identity")),
+    ]
+    basic_character = _join_parts(basic_parts)
+
+    views: dict[str, dict[str, str]] = {}
+    for view in ("front", "back"):
+        face = _layer_text(appearance.get("face"), view)
+        sfw_parts = (
+            face,
+            _layer_text(appearance.get("upperSfw"), view),
+            _layer_text(appearance.get("fullSfw"), view),
+        )
+        nsfw_parts = (
+            face,
+            _layer_text(appearance.get("upperNsfw"), view),
+            _layer_text(appearance.get("fullNsfw"), view),
+        )
+        views[view] = {"sfw": _join_parts(sfw_parts), "nsfw": _join_parts(nsfw_parts)}
+
+    outfit_values = appearance.get("outfits")
+    raw_outfits = outfit_values if isinstance(outfit_values, list) else []
+    active_outfit_id = _clean_text(appearance.get("activeOutfitId"))
+    outfits = []
+    for index, raw_outfit in enumerate(raw_outfits):
+        if not isinstance(raw_outfit, Mapping):
+            continue
+        outfit_id = _clean_text(raw_outfit.get("id")) or f"outfit-{index + 1}"
+        name_cn = _clean_text(raw_outfit.get("nameCN"))
+        name_en = _clean_text(raw_outfit.get("nameEN"))
+        outfits.append(
+            {
+                "id": outfit_id,
+                "label": name_cn or name_en or outfit_id,
+                "name_cn": name_cn,
+                "name_en": name_en,
+                "front": _join_parts(
+                    (
+                        _layer_text(raw_outfit.get("upper"), "front"),
+                        _layer_text(raw_outfit.get("full"), "front"),
+                    )
+                ),
+                "back": _join_parts(
+                    (
+                        _layer_text(raw_outfit.get("upper"), "back"),
+                        _layer_text(raw_outfit.get("full"), "back"),
+                    )
+                ),
+                "photo_prompt": _clean_text(raw_outfit.get("photoPrompt")),
+                "active": outfit_id == active_outfit_id,
+            }
+        )
+
+    prompt_source = prompts if prompts is not None else _mapping_values(character.get("prompts"))
+    normalized_prompts = []
+    for index, prompt in enumerate(prompt_source):
+        text = _clean_text(prompt.get("text"))
+        if not text:
+            continue
+        normalized_prompts.append(
+            {
+                "id": _clean_text(prompt.get("prompt_id") or prompt.get("id"))
+                or f"prompt-{index + 1}",
+                "label": _clean_text(prompt.get("label")) or "未命名提示词",
+                "text": text,
+            }
+        )
+
+    gallery = []
+    for index, image in enumerate(_mapping_values(character.get("gallery"))):
+        url = _clean_text(image.get("original_url") or image.get("url"))
+        thumbnail_url = _clean_text(image.get("thumbnail_url")) or url
+        if not _is_remote_visual(url) and not _is_remote_visual(thumbnail_url):
+            continue
+        gallery.append(
+            {
+                "id": _clean_text(image.get("id")) or f"image-{index + 1}",
+                "caption": _clean_text(image.get("caption")),
+                "thumbnail_url": thumbnail_url,
+                "original_url": url or thumbnail_url,
+            }
+        )
+
+    timeline = [
+        {
+            "id": _clean_text(item.get("id")) or f"event-{index + 1}",
+            "date": _clean_text(item.get("date")),
+            "title": _clean_text(item.get("title")),
+            "description": _clean_text(item.get("description")),
+            "importance": _clean_text(item.get("importance")) or "normal",
+        }
+        for index, item in enumerate(_mapping_values(character.get("timeline")))
+        if any(_clean_text(item.get(key)) for key in ("date", "title", "description"))
+    ]
+    relationships = [
+        {
+            "id": _clean_text(item.get("id")) or f"relationship-{index + 1}",
+            "target_id": _clean_text(item.get("targetId") or item.get("target_id")),
+            "type": _clean_text(item.get("type")) or "other",
+            "strength": item.get("strength", 0),
+            "note": _clean_text(item.get("note")),
+        }
+        for index, item in enumerate(_mapping_values(character.get("relationships")))
+    ]
+    world_name = _clean_text(character.get("world"))
+    return {
+        "character_id": character_id,
+        "name": name,
+        "world": world_name,
+        "story": _clean_text(character.get("story")),
+        "basic_character": basic_character,
+        "appearance": {
+            "front": views["front"],
+            "back": views["back"],
+            "negative": _clean_text(appearance.get("negative")),
+            "has_sfw": any(
+                _layer_has_text(appearance.get(key)) for key in ("face", "upperSfw", "fullSfw")
+            ),
+            "has_nsfw": any(
+                _layer_has_text(appearance.get(key)) for key in ("upperNsfw", "fullNsfw")
+            ),
+        },
+        "outfits": outfits,
+        "active_outfit_id": active_outfit_id,
+        "prompts": normalized_prompts,
+        "gallery": gallery,
+        "relationships": relationships,
+        "timeline": timeline,
+        "world_context": {"world_name": world_name, "lore": dict(lore or {})},
+    }
+
+
 def _parse_world_folders(payload: dict[str, Any]) -> OCImportBundle:
     raw_worlds = payload.get("worlds", {})
     if not isinstance(raw_worlds, dict):
@@ -193,6 +340,56 @@ def _text_values(values: Iterable[Any]) -> Iterable[str]:
             yield from _text_values(value.values())
         elif isinstance(value, Iterable):
             yield from _text_values(value)
+
+
+def _mapping_values(value: object) -> list[Mapping[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, Mapping)]
+
+
+def _clean_text(value: object) -> str:
+    if value is None or isinstance(value, (dict, list)):
+        return ""
+    return str(value).strip()
+
+
+def _age_text(value: object) -> str:
+    age = _clean_text(value)
+    if not age:
+        return ""
+    return f"{age} years old" if age.isdigit() else age
+
+
+def _layer_text(value: object, view: str) -> str:
+    if not isinstance(value, Mapping):
+        return ""
+    primary = "back" if view == "back" else "front"
+    fallback = "front" if primary == "back" else "back"
+    return _clean_text(value.get(primary)) or _clean_text(value.get(fallback))
+
+
+def _layer_has_text(value: object) -> bool:
+    return isinstance(value, Mapping) and bool(
+        _clean_text(value.get("front")) or _clean_text(value.get("back"))
+    )
+
+
+def _join_parts(values: Iterable[object]) -> str:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        for part in _clean_text(value).split(","):
+            clean = part.strip()
+            key = clean.casefold()
+            if clean and key not in seen:
+                seen.add(key)
+                result.append(clean)
+    return ", ".join(result)
+
+
+def _is_remote_visual(value: str) -> bool:
+    return value.startswith(("https://", "http://"))
 
 
 def _safe_filename(filename: str) -> str:
