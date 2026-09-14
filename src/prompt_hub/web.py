@@ -56,7 +56,9 @@ def render_index_html(device_name: str, *, usage_mode: str | None = None) -> str
         message = f"Unsupported usage mode: {mode}"
         raise ValueError(message)
     dataset_example, model_example = _usage_mode_examples(mode)
-    safe_name = device_name.strip() or ("Linux 绘图设备" if mode == LINUX_LOCAL else "Windows 绘图设备")
+    safe_name = device_name.strip() or (
+        "Linux 绘图设备" if mode == LINUX_LOCAL else "Windows 绘图设备"
+    )
     script_name = (
         json.dumps(safe_name, ensure_ascii=False)
         .replace("<", r"\u003c")

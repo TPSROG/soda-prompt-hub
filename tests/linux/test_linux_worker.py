@@ -288,5 +288,7 @@ def test_worker_uses_credentials_embedded_in_the_comfyui_url(tmp_path: Path) -> 
         )
         assert worker.run_once() is True
 
-    result = json.loads((bridge / "inbox" / f"{submitted['task_id']}.json").read_text(encoding="utf-8"))
+    result = json.loads(
+        (bridge / "inbox" / f"{submitted['task_id']}.json").read_text(encoding="utf-8")
+    )
     assert result["status"] == "completed"
