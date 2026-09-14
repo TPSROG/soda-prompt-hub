@@ -1,8 +1,9 @@
-"""服务端下发的媒体类型不能依赖系统 MIME 数据库。
+"""Media types must not depend on the host MIME database.
 
-Python 内置的 MIME 表不含 webp, `mimetypes` 只有在系统 /etc/mime.types 提供映射
-时才知道它。Ubuntu 22.04 等环境没有该映射, Starlette 的 FileResponse 会把缩略图
-当成 application/octet-stream 下发, 浏览器就不再内联显示图片。
+CPython's built-in MIME table has no `.webp` entry, so `mimetypes` only resolves it
+through /etc/mime.types. Where that mapping is missing (Ubuntu 22.04, minimal images)
+Starlette's FileResponse serves thumbnails as application/octet-stream and browsers
+stop rendering them inline.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from prompt_hub.media import media_type_for
 
 @pytest.fixture
 def without_system_mime_database(monkeypatch: pytest.MonkeyPatch) -> None:
-    """模拟没有 /etc/mime.types 映射的环境 (例如 Ubuntu 22.04 上的 webp)。"""
+    """Simulate a host whose MIME database does not know webp."""
     monkeypatch.setattr(mimetypes, "guess_type", lambda *_args, **_kwargs: (None, None))
 
 

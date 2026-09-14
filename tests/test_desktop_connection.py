@@ -46,8 +46,8 @@ def heartbeat(**overrides):
     }
 
 
-# 用例执行时才生成"未来 2 分钟"的时间戳; 写在 parametrize 里会在收集阶段定值,
-# 从而随整轮测试耗时漂移 (见下方注释)。
+# The "two minutes ahead" timestamp is created when the test runs rather than when
+# pytest collects the parameters: a collected value drifts with the suite runtime.
 _FUTURE_TIMESTAMP = object()
 
 
@@ -66,9 +66,10 @@ _FUTURE_TIMESTAMP = object()
 def test_connection_only_reports_fresh_live_worker(connection_store, changes, state):
     store, bridge = connection_store
     if changes.get("checked_at") is _FUTURE_TIMESTAMP:
-        # 这里必须在执行时取值。`connection_summary` 用「未来超过 15 秒」判定 stale,
-        # 若时间戳在收集阶段算好, 慢机器上 (收集到执行间隔超过 105 秒) 会落进
-        # 「未来 0~15 秒」的窗口, 把 stale 误判成 connected。
+        # Must be computed here. `connection_summary` treats a heartbeat as stale only
+        # when it is more than 15s in the future, so a timestamp captured at collection
+        # time lands in the "0~15s ahead" window on slow machines and this stale case
+        # would read as connected.
         changes = {
             **changes,
             "checked_at": (datetime.now(UTC) + timedelta(minutes=2)).isoformat(),

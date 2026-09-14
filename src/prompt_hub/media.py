@@ -15,10 +15,11 @@ _CLIO_SOURCE_ID = "clio-style-preview"
 _ANIMADEX_SOURCE_ID = "animadex"
 _THUMBNAIL_SIZE = (640, 640)
 
-# 项目自己产出的图片格式必须有确定的媒体类型。Python 内置的 MIME 表不含 webp,
-# mimetypes 只有读到系统 /etc/mime.types 里的映射才知道它; 在 Ubuntu 22.04 这类
-# 环境里没有该映射, Starlette 的 FileResponse 会退化成 application/octet-stream,
-# 浏览器就不再内联显示图片。
+# Formats this project produces must have a fixed media type. CPython's built-in MIME
+# table has no entry for .webp, so `mimetypes` only resolves it through the system
+# /etc/mime.types mapping. Where that mapping is missing (Ubuntu 22.04, minimal images)
+# Starlette's FileResponse falls back to application/octet-stream and browsers stop
+# rendering the image inline.
 _IMAGE_MEDIA_TYPES: dict[str, str] = {
     ".avif": "image/avif",
     ".bmp": "image/bmp",
@@ -33,7 +34,11 @@ _IMAGE_MEDIA_TYPES: dict[str, str] = {
 
 
 def media_type_for(path: Path) -> str:
-    """Return a concrete media type for a file we serve ourselves."""
+    """Return a concrete media type for a file we serve ourselves.
+
+    Project-generated image formats get a fixed answer, so serving them never depends
+    on the host MIME database. Other suffixes still go through `mimetypes`.
+    """
     known = _IMAGE_MEDIA_TYPES.get(path.suffix.casefold())
     if known is not None:
         return known
