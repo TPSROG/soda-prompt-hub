@@ -15,7 +15,9 @@ COMFY_STYLES = r"""
   .comfy-panel { border: 1px solid var(--line); background: var(--paper); padding: 20px; }
   .comfy-panel h2 { margin: 0 0 14px; font: 900 16px Georgia, serif; }
   .comfy-panel label { display: grid; gap: 7px; color: var(--muted); font: 800 9px/1.4 monospace; text-transform: uppercase; }
-  .comfy-panel input, .comfy-panel select { width: 100%; min-height: 42px; border: 1px solid var(--line); background: #fbf6ec; padding: 9px; color: var(--ink); }
+  .comfy-panel input:not([type="checkbox"]):not([type="radio"]), .comfy-panel select { width: 100%; min-height: 42px; border: 1px solid var(--line); background: #fbf6ec; padding: 9px; color: var(--ink); }
+  .comfy-panel .comfy-check { display: flex; align-items: center; gap: 8px; margin-top: 9px; cursor: pointer; }
+  .comfy-check input[type="checkbox"] { width: 16px; height: 16px; min-height: 0; flex: 0 0 16px; margin: 0; padding: 0; accent-color: var(--signal); }
   .comfy-file { display: flex !important; align-items: center; justify-content: center; min-height: 42px; border: 1px dashed rgba(23,24,21,.42); background: #eee7da; cursor: pointer; color: var(--ink) !important; }
   .comfy-button { min-height: 40px; border: 1px solid var(--ink); background: var(--ink); padding: 9px 13px; color: var(--paper); font: 900 9px monospace; cursor: pointer; }
   .comfy-button.secondary { background: transparent; color: var(--ink); }
@@ -60,7 +62,7 @@ COMFY_HTML = r"""
   </section>
   <section class="comfy-controls">
     <form class="comfy-panel" id="comfyFileForm"><h2>1. 导入一张图片</h2><label class="comfy-file" for="comfyFile">选择 PNG / JPEG / WebP<input id="comfyFile" type="file" accept="image/png,image/jpeg,image/webp" hidden></label><p id="comfyFileName">尚未选择图片</p><button class="comfy-button signal" type="submit">导入并读取生成参数</button></form>
-    <form class="comfy-panel" id="comfyDirectoryForm"><h2>或：扫描整个结果文件夹</h2><label>运行工作台的设备能访问的文件夹路径<input id="comfyDirectory" placeholder="例如 D:\ComfyUI\output，或 /Volumes/ComfyUI/output"></label><label><span><input id="comfyRememberDirectory" type="checkbox" checked> 设为常用结果目录，下次自动填入</span></label><p>递归读取 PNG / JPEG / WebP，最多 2000 张。新目录会增补，不会覆盖旧记录；源文件始终保持不变。</p><button class="comfy-button" id="comfyScanStart" type="submit">扫描这个文件夹</button> <button class="comfy-button secondary" id="comfyScanCancel" type="button" hidden>取消扫描</button><div class="comfy-scan-status"><div id="comfyScanStatus" role="status" aria-live="polite">尚未开始扫描。</div><progress id="comfyScanProgress" aria-label="目录导入进度" hidden></progress><small id="comfyScanDetail">可切换页面；刷新后会恢复显示任务。取消会保留已导入图片。</small></div></form>
+    <form class="comfy-panel" id="comfyDirectoryForm"><h2>或：扫描整个结果文件夹</h2><label>运行工作台的设备能访问的文件夹路径<input id="comfyDirectory" placeholder="例如 D:\ComfyUI\output，或 /Volumes/ComfyUI/output"></label><label class="comfy-check"><input id="comfyRememberDirectory" type="checkbox" checked><span>设为常用结果目录，下次自动填入</span></label><p>递归读取 PNG / JPEG / WebP，最多 2000 张。新目录会增补，不会覆盖旧记录；源文件始终保持不变。</p><button class="comfy-button" id="comfyScanStart" type="submit">扫描这个文件夹</button> <button class="comfy-button secondary" id="comfyScanCancel" type="button" hidden>取消扫描</button><div class="comfy-scan-status"><div id="comfyScanStatus" role="status" aria-live="polite">尚未开始扫描。</div><progress id="comfyScanProgress" aria-label="目录导入进度" hidden></progress><small id="comfyScanDetail">可切换页面；刷新后会恢复显示任务。取消会保留已导入图片。</small></div></form>
     <div class="comfy-panel"><h2>2. 选择它属于哪个项目</h2><label>创作项目<select id="comfyProject"><option value="">请选择项目</option></select></label><p>除了“记录为失败测试”，其他处理方式都需要先选择项目。</p><button class="comfy-button secondary" id="comfyRefresh" type="button">刷新结果列表</button></div>
   </section>
   <div class="comfy-status" id="comfyStatus">先导入图片，或扫描 Windows 的结果文件夹。</div>
