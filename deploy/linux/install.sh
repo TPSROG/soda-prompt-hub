@@ -215,7 +215,9 @@ if [[ "${INSTALL_SERVICE}" -eq 1 ]]; then
 else
     printf -- '\n--- 跳过 systemd 服务 ---\n'
     sph_info "使用 ./deploy/linux/start.sh 启动，或直接运行："
-    sph_info "  PROMPT_HUB_LIBRARY_ROOT=${LIBRARY_ROOT} ${REPO_ROOT}/.venv/bin/prompt-hub serve --host ${HOST} --port ${PORT}"
+    sph_info "  PROMPT_HUB_LIBRARY_ROOT=${LIBRARY_ROOT} \\"
+    sph_info "  PROMPT_HUB_MODELS_ROOT=${MODELS_ROOT} \\"
+    sph_info "  ${REPO_ROOT}/.venv/bin/prompt-hub serve --host ${HOST} --port ${PORT}"
 fi
 
 # ---------------------------------------------------------------- 7. 安装记录
