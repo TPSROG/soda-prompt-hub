@@ -149,7 +149,7 @@ CREATIVE_HTML = r"""
       </section>
       <input class="recipe-name" id="recipeName" maxlength="160" aria-label="配方名称（可选）" placeholder="配方名称（可选）">
       <div class="output-actions"><button class="creative-action primary" id="saveRecipe">保存为配方</button><button class="creative-action" id="exportCreative">导出 Anima + Krea 2 JSON</button><button class="creative-action" data-view="prompts">继续找参考资料</button></div>
-      <p class="save-state" id="creativeSaveState">尚未建立项目</p>
+      <p class="save-state" id="creativeSaveState" role="status" aria-live="polite">尚未建立项目</p>
     </aside>
   </div>
 </section>
