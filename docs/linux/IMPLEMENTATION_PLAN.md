@@ -1,9 +1,9 @@
 # Linux Implementation Plan
 
-本文件是主任务书 §30 要求的 **Implementation Plan**，与 `docs/LINUX_COMPATIBILITY_AUDIT.md`（审计）配套。
+本文件是主任务书 §30 要求的 **Implementation Plan**，与 `docs/linux/COMPATIBILITY_AUDIT.md`（审计）配套。
 两者合起来构成第一阶段的分析交付物。
 
-基线：`upstream/main` = `e96249b`（1.1.1）。实测环境见 `docs/LINUX_DEV_ENVIRONMENT.md`。
+基线：`upstream/main` = `e96249b`（1.1.1）。实测环境见 `docs/linux/DEV_ENVIRONMENT.md`。
 
 ---
 
@@ -20,7 +20,7 @@
 | Linux CI | `.github/workflows/linux.yml`：只补上游没有的部分（Ubuntu 22.04/24.04 矩阵 + 部署冒烟） |
 | 上游同步 | `.github/workflows/upstream-sync.yml`：每日检查，更新则开同步分支 + PR，冲突则开 Issue |
 | 自动 Release | `.github/workflows/release-linux.yml`：`tar.gz` + `SHA256SUMS` |
-| 文档 | `docs/LINUX_INSTALL.md`、`docs/LINUX_UPDATE.md`、README Linux 章节、CHANGELOG Linux 条目 |
+| 文档 | `docs/linux/INSTALL.md`、`docs/linux/UPDATE.md`、README Linux 章节、CHANGELOG Linux 条目 |
 
 ### 第一阶段明确不做
 
@@ -122,7 +122,7 @@ curl http://127.0.0.1:8765/api/health
 
 ### Phase 9｜文档
 
-`docs/LINUX_INSTALL.md`、`docs/LINUX_UPDATE.md`、README Linux 章节（标注 `Experimental`，写明 Core 支持 / Worker 不支持）、
+`docs/linux/INSTALL.md`、`docs/linux/UPDATE.md`、README Linux 章节（标注 `Experimental`，写明 Core 支持 / Worker 不支持）、
 `CHANGELOG.md` 的 Linux 条目。
 
 ### Phase 10｜最终验收
@@ -145,7 +145,7 @@ curl http://127.0.0.1:8765/api/health
 | 风险 | 缓解 |
 | --- | --- |
 | 上游高速迭代导致 rebase 冲突 | 改动纯新增（D2）；唯一核心改动走上游 PR（D11） |
-| WSL 与真实 Ubuntu 差异 | CI 用真实 `ubuntu-latest` 交叉验证；WSL 限制写入 `LINUX_DEV_ENVIRONMENT.md` |
+| WSL 与真实 Ubuntu 差异 | CI 用真实 `ubuntu-latest` 交叉验证；WSL 限制写入 `DEV_ENVIRONMENT.md` |
 | `Linger=no` 导致 user service 在会话结束后停止 | `install.sh --enable-linger` 作为可选参数（D7），并在安装输出中明确提示 |
 | 误改用户数据 | `update.sh` 打印更新前后数据库大小/mtime 作为证据；`uninstall.sh` 默认保留数据 |
 | 上游 CI 的 Node 隐性依赖 | Linux CI 显式安装 Node（审计 §10.2） |

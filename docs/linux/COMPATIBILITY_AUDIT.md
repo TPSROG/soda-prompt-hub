@@ -2,6 +2,13 @@
 
 Soda Prompt Hub Linux 适配审计报告（第一阶段交付物）。
 
+> **文档位置说明**：上游 `tests/test_public_docs.py` 要求 `docs/*.md`（顶层）**恰好**是 12 个既有文件，
+> 为不修改上游文档契约，Linux 相关文档统一放在 `docs/linux/` 子目录。与主任务书中的路径对应关系：
+> `docs/LINUX_COMPATIBILITY_AUDIT.md` → `docs/linux/COMPATIBILITY_AUDIT.md`；
+> `docs/LINUX_DEV_ENVIRONMENT.md` → `docs/linux/DEV_ENVIRONMENT.md`；
+> `docs/LINUX_INSTALL.md` → `docs/linux/INSTALL.md`；
+> `docs/LINUX_UPDATE.md` → `docs/linux/UPDATE.md`。
+
 | 项目 | 值 |
 | --- | --- |
 | 上游仓库 | `https://github.com/cOkieeman/soda-prompt-hub` |
@@ -21,7 +28,7 @@ Soda Prompt Hub Linux 适配审计报告（第一阶段交付物）。
 3. **核心代码只有 2 个真实缺口**，且都不阻塞“Linux Core 可启动”：
    - **G1｜使用模式没有 Linux 语义**：Linux 会被推断为 `mac_remote`（“Mac 管理 Windows”的远端模式）。
    - **G2｜SMB 双机配对仅 macOS**：Linux 上该能力不存在，应标注“暂不支持”，而不是伪造一条走不通的路径。
-4. 其余工作全部是新增文件（`deploy/linux/`、`.github/workflows/linux.yml`、`docs/LINUX_*.md`、`CHANGELOG.md` 条目），**不触碰上游核心**，满足主任务书 §1/§16 对“diff 纯新增、可自动 rebase”的要求。
+4. 其余工作全部是新增文件（`deploy/linux/`、`.github/workflows/linux.yml`、`docs/linux/*.md`、`CHANGELOG.md` 条目），**不触碰上游核心**，满足主任务书 §1/§16 对“diff 纯新增、可自动 rebase”的要求。
 
 分类统计：
 
@@ -202,7 +209,7 @@ Soda Prompt Hub Linux 适配审计报告（第一阶段交付物）。
 | Phase 6 | Linux CI：`.github/workflows/linux.yml`（补充上游没有的部署冒烟与 22.04/24.04 矩阵） | 否 |
 | Phase 7 | 上游同步：`.github/workflows/upstream-sync.yml` | 否 |
 | Phase 8 | 自动 Release：`.github/workflows/release-linux.yml`（`tar.gz` + `SHA256SUMS`） | 否 |
-| Phase 9 | 文档：`docs/LINUX_INSTALL.md`、`docs/LINUX_UPDATE.md`、`docs/LINUX_DEV_ENVIRONMENT.md`、README / CHANGELOG | 否 |
+| Phase 9 | 文档：`docs/linux/INSTALL.md`、`docs/linux/UPDATE.md`、`docs/linux/DEV_ENVIRONMENT.md`、README / CHANGELOG | 否 |
 | Phase 10 | 最终验收（主任务书 §27/§29） | 否 |
 | 独立轨道 | G1 反哺上游 PR（`linux_local` 使用模式） | **是** |
 
@@ -229,7 +236,7 @@ Soda Prompt Hub Linux 适配审计报告（第一阶段交付物）。
 ## 10. Linux 实测结果（WSL2 首轮，2026-09-14）
 
 环境：WSL2 + Ubuntu 24.04.5 LTS，x86_64，Python 3.12.3，uv 0.12.13。
-详细环境记录见 `docs/LINUX_DEV_ENVIRONMENT.md`。
+详细环境记录见 `docs/linux/DEV_ENVIRONMENT.md`。
 
 ### 10.1 上游基线：测试与构建
 
