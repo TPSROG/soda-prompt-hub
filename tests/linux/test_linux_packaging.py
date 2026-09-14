@@ -224,11 +224,14 @@ def test_upstream_sync_never_merges_into_the_maintenance_branch() -> None:
     """主任务书 §15 / §16: 每日检查、成功开 PR、冲突开 Issue, 绝不直接合并到维护分支。"""
     workflow = _workflow("upstream-sync.yml")
     assert 'cron: "0 2 * * *"' in workflow, "应为每日一次检查"
-    assert "git merge --no-edit upstream/main" in workflow, "应在同步分支上尝试合并"
+    assert "merge --no-edit upstream/main" in workflow, "应在同步分支上尝试合并"
     assert "gh pr create" in workflow, "合并成功应开 PR"
     assert "gh issue create" in workflow, "冲突应开 Issue"
     assert "--force-with-lease origin" in workflow, "只应推送同步分支"
     assert "upstream-baseline.txt" in workflow, "应记录已同步的上游基线"
+    # 合并提交需要提交身份, runner 上默认没有 (曾因此把 CI 失败误判成冲突)
+    assert "-c user.name=" in workflow, "合并前必须提供提交身份"
+    assert "conflict-files.txt" in workflow, "应区分内容冲突与其它合并错误"
     # 不允许把上游直接推/合并到维护分支
     assert "push origin main" not in workflow
     assert "push origin ${SYNC_BASE_BRANCH}" not in workflow
@@ -244,3 +247,6 @@ def test_release_workflow_publishes_prerelease_with_checksums() -> None:
     assert "SHA256SUMS" in workflow
     assert "--prerelease" in workflow
     assert "tar -C" in workflow
+    # `tar -tzf ... | head` 在 pipefail 下会因 SIGPIPE 失败 (曾导致发布步骤中断)
+    assert "| head -n 20" not in workflow, "不要在 pipefail 下用 head 截断 tar 输出"
+    assert "contents.txt" in workflow

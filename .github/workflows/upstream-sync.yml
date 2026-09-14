@@ -114,12 +114,22 @@ jobs:
           fi
           echo "branch=${branch}" >>"${GITHUB_OUTPUT}"
           echo "base=${base}" >>"${GITHUB_OUTPUT}"
-          if git merge --no-edit upstream/main; then
+          # 合并提交需要提交身份；runner 上没有配置，必须显式给出。
+          if git -c user.name="upstream-sync[bot]" \
+            -c user.email="upstream-sync@users.noreply.github.com" \
+            merge --no-edit upstream/main; then
             echo "conflict=false" >>"${GITHUB_OUTPUT}"
-          else
+            exit 0
+          fi
+          # 合并失败要区分「内容冲突」与「其它错误」，不能一律当冲突上报。
+          git diff --name-only --diff-filter=U >conflict-files.txt || true
+          if [[ -s conflict-files.txt ]]; then
             echo "conflict=true" >>"${GITHUB_OUTPUT}"
-            git diff --name-only --diff-filter=U >conflict-files.txt || true
             git merge --abort || true
+          else
+            echo "::error::合并失败但不是内容冲突，基线保持不动，请查看上面的 git 输出"
+            git merge --abort || true
+            exit 1
           fi
 
       - name: 记录新基线
