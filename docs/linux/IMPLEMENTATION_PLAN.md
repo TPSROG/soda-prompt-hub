@@ -219,9 +219,11 @@ docs(linux): add Linux installation guide
 | --- | --- |
 | 静态契约测试 | `tests/linux/test_linux_packaging.py`（脚本清单、严格模式、不依赖 CWD、无 sudo、无 777、不把远程内容管道给 shell、默认只用 127.0.0.1、unit 必须是用户服务且有重启策略、模板占位符必须全部被替换、XDG 路径、update 仅快进、uninstall 默认保留数据、LF/UTF-8/无本机路径、`bash -n`） |
 | 行为测试 | `tests/linux/test_linux_deployment.py`（隔离 `HOME`/XDG 下跑 help、未安装时的错误提示、`install --no-service` → start → 健康检查 → status → stop 全流程，并验证程序与用户数据分离） |
-| 结果 | 新增用例 **18 passed**；完整套件 **561 passed / 9 skipped / 0 failed**（WSL2 Ubuntu 24.04，覆盖率 83.4%） |
+| 结果 | 新增用例 **22 passed**；完整套件 **565 passed / 9 skipped / 0 failed**（WSL2 Ubuntu 24.04） |
 | 抓到的真实缺陷 | `install.sh --no-service` 打印的直接运行命令漏了 `PROMPT_HUB_MODELS_ROOT`（已修复） |
 | 上游契约约束 | `tests/test_public_docs.py` 要求 `docs/*.md` 顶层**恰好**是 12 个既有文件，因此 Linux 文档统一放在 `docs/linux/` 子目录（不改上游契约） |
+| §12 清单覆盖闭环 | 严格复核发现首轮缺 4 项，已补齐：中文 + UTF-8 + 空格路径、`PROMPT_HUB_MODELS_ROOT` 行为、资料库**写入 / 读取 / 重启后保留**、`localhost` 访问 |
+| 复核新增发现 | §1.1 关键词重跑后新增 2 项 Linux 受限点（F1 数据集浏览不含外接卷、F2 快捷入口仅英文目录名），已写入审计 §11 |
 
 ### Phase 6｜Linux CI — ✅ 工作流就绪
 

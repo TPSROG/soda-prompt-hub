@@ -40,6 +40,9 @@ Soda Prompt Hub Linux 适配审计报告（第一阶段交付物）。
 | D Linux 暂不支持 | 5 | Compute Worker、桌面宿主、SMB 双机、LoRA 训练、平台安装包 |
 | E 建议抽象 | 0 | 不建议新增平台抽象层（见 §3） |
 
+> 2026-09-14 **严格复核补充**：逐条重跑主任务书 §1.1 的全部关键词后，新增发现 **2 项 Linux 受限点**
+> （分类属 C 类，见 §11）。上表为第一轮结论；复核结果不改变“核心无需修改即可运行”的判断。
+
 ---
 
 ## 1. 已兼容（A）
@@ -172,6 +175,8 @@ Soda Prompt Hub Linux 适配审计报告（第一阶段交付物）。
 
 | 能力 | 状态 | 原因 | 处理方式 |
 | --- | --- | --- | --- |
+| 数据集工作区目录浏览的“外接卷” | **受限** | `browse_roots()` 只认 `$HOME` 与 macOS 的 `/Volumes`，Linux 上的 `/media`、`/mnt` 不在浏览范围内（见 §11 F1） | 需要时把资料放进主目录或用符号链接接入；修法建议走上游 PR |
+| 主目录快捷入口（桌面 / 图片 / 下载） | **受限** | 固定英文目录名，中文等其他 locale 的 Linux 上不显示；有 `is_dir()` 保护，不会报错（见 §11 F2） | 低优先，可与 locale 适配一起反哺上游 |
 | Compute Worker（ComfyUI 执行端） | **暂不支持** | Worker 是 Windows 实体（GUI/托盘/`.bat`/`.ps1`/本机服务管理） | 标注 `Linux unsupported / future work`；未来需另立设计（HTTP/WebSocket 协议 + CLI daemon） |
 | SMB 双机配对 | **暂不支持** | 见 G2，实现硬编码 macOS + GVFS 桌面会话 | 标注不支持，不提供入口 |
 | LoRA 正式训练 | **暂不支持** | 上游本身也在 Windows 训练工具中完成 | 标注不支持 |
@@ -286,6 +291,48 @@ Soda Prompt Hub Linux 适配审计报告（第一阶段交付物）。
 | 下载源 | `releases.astral.sh` 约 3 KB/s 不可用（uv 改用 pipx + PyPI 镜像安装）；Ubuntu 源与 PyPI 均正常 |
 | Node.js | 见 10.2，必须安装 |
 | `xdg-open` | 未安装，无桌面会话；“打开所在文件夹”会走失败分支（可用于验证可读错误，但无法验证图形打开） |
+
+---
+
+## 11. 复核补充发现（2026-09-14 严格复核）
+
+复核方式：逐条重跑主任务书 §1.1 的全部关键词，并对照 §12 的测试清单逐项核对用例覆盖。
+
+### 11.1 关键词覆盖闭环
+
+| 关键词 | 命中情况 | 结论 |
+| --- | --- | --- |
+| `platform.machine()` | 0 | 无依赖机器架构的分支 |
+| UNC 路径 `\\host\share` | 0 | `src/` 中无 UNC 硬编码 |
+| `cmd.exe` | 0 | 无 `cmd` 调用 |
+| `.exe` | 仅 `explorer.exe`（`workspace_routes.py:748`，Windows 分支） | 已归类，无需处理 |
+| `.bat` | 仅 `tests/` 中 Windows 打包测试的断言 | 不影响 Linux |
+| `Desktop` | 1 处实质命中（`dataset_workspace.py:38`） | → F2 |
+| `Finder` / `/Volumes` / `osascript` | `remote_web.py`、`pairing_web.py`、`dataset_workspace.py` | 归入 G2 与 F1 |
+
+### 11.2 F1｜数据集目录浏览不覆盖 Linux 外接卷（Medium）
+
+| 项目 | 内容 |
+| --- | --- |
+| 位置 | `src/prompt_hub/dataset_workspace.py:615-630`（`browse_roots()`） |
+| 问题 | 浏览根 = `$HOME` 加上“若 `/Volumes` 存在则枚举其子目录”（macOS 惯例）。Linux 的 `/media/$USER`、`/run/media/$USER`、`/mnt/*` 都不在范围内。 |
+| 影响 | 数据集导入/浏览只能看到主目录；素材放在挂载盘的用户会“看不到盘”。**不会崩溃**：越界时返回可读错误“目录浏览范围仅限于个人主目录和已挂载的外接卷”。 |
+| 方案 | 第一阶段零改动，文档说明可把资料放进主目录或用符号链接接入；长期建议向上游 PR 增加 XDG 挂载点扫描。 |
+| 是否影响 upstream merge | 不改代码则无影响。 |
+
+### 11.3 F2｜主目录快捷入口仅识别英文目录名（Low）
+
+| 项目 | 内容 |
+| --- | --- |
+| 位置 | `src/prompt_hub/dataset_workspace.py:38`（`BROWSE_HOME_SHORTCUTS = Desktop / Pictures / Downloads`） |
+| 问题 | 快捷入口固定英文目录名；中文等 locale 的 Linux（`~/桌面`、`~/图片`、`~/下载` 或 xdg-user-dirs 自定义）不会出现这些入口。 |
+| 影响 | 仅体验问题：逐项 `is_dir()` 判断，目录不存在就直接跳过，不会报错。 |
+| 方案 | 低优先；若要修，建议读取 XDG `user-dirs.dirs` 并反哺上游。 |
+
+### 11.4 结论
+
+两项都属于“Linux 使用受限”，不影响第一阶段“可运行 / 可部署 / 可更新”的结论，
+也不改变 §0 中“核心无需修改即可运行”的判断。
 
 ---
 
