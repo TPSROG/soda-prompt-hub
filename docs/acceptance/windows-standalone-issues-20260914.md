@@ -191,11 +191,11 @@ C:\Users\<用户名>\Documents\Soda Prompt Hub\prompt-library\
 
 ## 已有历史问题记录
 
-以下问题已有独立记录，本文件不重复展开：
+以下问题已有本地审计记录；公开文档保留编号与结论，不链接包含设备路径和现场信息的本地记录：
 
-- [WIN-DESKTOP-001](../bugs/WIN-DESKTOP-001.md)：Windows 单机冷启动 UI 死锁，已修复。
-- [WIN-DESKTOP-002](../bugs/WIN-DESKTOP-002.md)：安装包缺少 Git，资料库无法拉取，已修复。
-- [DESKTOP-003–005](../bugs/DESKTOP-003-005.md)：扫描无反馈、模型表单误隐藏、启动器对比度，已修复。
+- `WIN-DESKTOP-001`：Windows 单机冷启动 UI 死锁，已修复。
+- `WIN-DESKTOP-002`：安装包缺少 Git，资料库无法拉取，已修复。
+- `DESKTOP-003–005`：扫描无反馈、模型表单误隐藏、启动器对比度，已修复。
 
 这些“已修复”状态只对应各文档写明的构建和证据；以后修改共享 Core、启动器或 WebUI 后仍应做相关回归。
 
