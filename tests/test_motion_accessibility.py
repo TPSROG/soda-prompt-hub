@@ -164,8 +164,7 @@ def test_dense_result_surfaces_do_not_gain_mount_animations() -> None:
 def test_checkbox_controls_are_not_sized_like_text_fields() -> None:
     assert 'input:not([type="checkbox"]):not([type="radio"]), select' in BASE_CSS
     assert (
-        '.comfy-panel input:not([type="checkbox"]):not([type="radio"]), '
-        ".comfy-panel select"
+        '.comfy-panel input:not([type="checkbox"]):not([type="radio"]), .comfy-panel select'
     ) in COMFY_WEB
     assert 'class="comfy-check"' in COMFY_WEB
     assert '.comfy-check input[type="checkbox"]' in COMFY_WEB
