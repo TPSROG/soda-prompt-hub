@@ -386,6 +386,20 @@ Soda Prompt Hub Linux 适配审计报告（第一阶段交付物）。
 
 ---
 
+## 13. 后续修复情况（2026-09-15）
+
+| 编号 | 问题 | 状态 |
+| --- | --- | --- |
+| G1 | 使用模式只有 `windows_local` / `mac_remote`，Linux 落入 macOS 远端语义 | ✅ 已修复：新增 `linux_local`（`src/prompt_hub/usage_modes.py`，commit `4c28d3f`） |
+| G2 | Linux 侧需要 SMB 语义才能与计算端协作 | ✅ 已解决：Core 与 Worker 走本地桥接目录，`install.sh --with-worker` 自动登记本机节点；配对入口在本机模式下隐藏 |
+| — | `comfyui_url` 被限制为本机 http，且 HTTP 客户端不带认证 | ✅ 已修复：支持任意 `http(s)` 主机与 URL 内嵌 Basic 认证（commit `0af44d5`） |
+| F1 | 数据集目录浏览不含 Linux 外接卷（`/media`、`/mnt`） | ⬜ 未修复（可用符号链接规避） |
+| F2 | 主目录快捷入口仅识别英文目录名 | ⬜ 未修复 |
+
+Linux Compute Worker 已用真实 ComfyUI 端到端出图验证，详见 `docs/linux/WORKER.md`。
+
+---
+
 ## 附录 A：复现本次审计的命令
 
 ```bash

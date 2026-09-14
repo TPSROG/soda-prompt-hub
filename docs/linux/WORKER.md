@@ -3,8 +3,8 @@
 把本机（或局域网内任意 Linux 机器）变成 Soda Prompt Hub 的计算节点：
 从桥接目录领取任务 → 调用 ComfyUI 的 HTTP API 出图 → 把结果与校验和写回桥接目录。
 
-> 状态：**实验性**。协议层已端到端验证（见下方"验证结果"），但**界面侧的设备配置**目前仍带
-> macOS/Windows 假设（审计 G1/G2），从 UI 直接配对还需要后续工作；当前可用方式是命令行与桥接目录。
+> 状态：**实验性**。协议层与界面链路都已端到端验证：Core 认这条本机 Worker（`linux_local` 本机模式，
+> `install.sh --with-worker` 会自动登记节点），界面派发的任务与命令行派发走的是同一条 API。
 
 ## 前置条件
 
@@ -101,7 +101,31 @@ Core 在导入前会逐个校验产物 sha256（`RemoteNodeStore.verify_returned
 
 | 项目 | 说明 |
 | --- | --- |
-| 界面配对 | Core 的设备页仍按 macOS/Windows 语义工作（审计 G1/G2）；目前建议用命令行驱动，或直接调用桥接 API |
-| SMB 相关动作 | `remote_routes.py` 的挂载诊断仅在 macOS 实现；Linux 用本地目录代替，不会走那条路径 |
+| 界面配对 | 已在 Linux 上打通：Core 以 `linux_local` 本机模式运行，设备页显示本机 Worker 与心跳，**不需要 SMB 配对**（审计 G1/G2 已修复） |
+| SMB 相关动作 | `remote_routes.py` 的挂载诊断仍仅 macOS 实现；Linux 走本地目录，从不经过那条路径 |
 | 训练 | `lora_train` 不在 Linux Worker 能力内 |
 | ComfyUI 安装 | 需要你自备一个可访问的 ComfyUI；本仓库不打包 ComfyUI，也不下载模型 |
+| 凭据存放 | 若 ComfyUI 需要认证，凭据以明文写在 `worker-config.json`（本机文件，不进版本库）；更严格的做法是后续改成从环境变量读取 |
+
+## 远端与带认证的 ComfyUI
+
+`comfyui_url` 不限于本机，只要是 `http(s)` 且带主机名即可：
+
+```json
+{ "comfyui_url": "https://用户名:密码@comfyui.example.com" }
+```
+
+URL 里的凭据会自动转成 `Authorization: Basic …` 请求头，并从内部 base_url 中剥离（日志与错误信息里不会出现）。
+
+## 真实出图验证（2026-09-15）
+
+用一台远端 Windows 机器上的 ComfyUI（RTX 5060 Laptop，8.5 GB VRAM，ComfyUI 0.35.0，启用 HTTP Basic 认证）完成：
+
+| 步骤 | 结果 |
+| --- | --- |
+| Core 通过 HTTP API 派单 | `POST /api/remote-nodes/compute-5060ti/tasks` → 返回 `task_id` |
+| Worker（systemd 用户服务）领取并执行 | 日志：`完成任务 task-…，回传 3 个文件` |
+| 出图参数 | `novaAnimeXL_ilV190`，768×1024，24 步，`euler_ancestral` + `karras` |
+| 产物 | `image`（887 KB PNG，768×1024）、`workflow-api.json`、`run-log.json`，逐个带 sha256 |
+| Core 完整性校验 | ✅ 通过（回显源包哈希） |
+| 耗时 | 248 秒（含首次加载约 6.5 GB 的 SDXL 权重） |

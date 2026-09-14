@@ -54,7 +54,8 @@ git switch linux/main
 | Core：资料库、检索、创作、审核、数据集整理 | **支持**（Ubuntu 24.04 实测；22.04 需本分支的媒体类型修复） |
 | systemd 用户服务、安装 / 更新 / 卸载脚本 | **支持** |
 | CLI（`prompt-hub` / `soda-prompt-hub`） | **支持** |
-| Compute Worker（ComfyUI 出图执行端） | **实验性支持**：`install.sh --with-worker`，协议端到端已验证 → [WORKER.md](WORKER.md) |
+| Compute Worker（ComfyUI 出图执行端） | **实验性支持**：`install.sh --with-worker`，已用真实 ComfyUI 出图验证 → [WORKER.md](WORKER.md) |
+| 远端 / 带认证的 ComfyUI | **支持**：`comfyui_url` 可用 `http(s)://用户名:密码@主机` |
 | SMB 双机配对 | 暂不支持；Linux 侧用本地桥接目录代替（无需 SMB） |
 | LoRA 正式训练 | 暂不支持（Windows-only） |
 | 桌面宿主（托盘 / 启动器 GUI） | 暂不支持，用 systemd + 浏览器代替 |
@@ -139,7 +140,7 @@ upstream（官方）── 每日检查 ──▶ 有更新？
 | --- | --- | --- |
 | 数据集目录浏览不含外接卷 | `browse_roots()` 只认 `$HOME` 与 macOS `/Volumes`；Linux 的 `/media`、`/mnt` 不在范围内 | 审计 §11 F1 |
 | 主目录快捷入口仅英文名 | `Desktop / Pictures / Downloads`，中文等 locale 下不显示（有 `is_dir()` 保护，不报错） | 审计 §11 F2 |
-| 使用模式语义 | 核心只有 `windows_local` / `mac_remote` 两种模式，Linux 现按 `mac_remote` 语义运行，界面文案偏 macOS | 审计 G1 |
+| 使用模式语义 | ✅ 已修复：Linux 现在是 `linux_local` 本机模式（审计 G1/G2） | 审计 §13 |
 | Compute Worker | 本机 ComfyUI 执行端仍仅限 Windows | 审计 §6 |
 
 ## 怎么验证

@@ -19,7 +19,10 @@
   systemd 单元；Worker 从桥接目录领取任务、调用 ComfyUI HTTP API 出图并回传带 sha256 的结果。
   协议层已在 Linux 上端到端验证（真 Worker + 真桥接 + 假 ComfyUI，无需 GPU）；LoRA 正式训练仍仅限 Windows。
 - 修复：`install.sh --no-service` 打印的直接运行命令此前漏掉 `PROMPT_HUB_MODELS_ROOT`。
-- 已知限制：Compute Worker（本机 ComfyUI 执行端）、SMB 双机配对与 LoRA 正式训练仍仅限 Windows。
+- 新增 Linux 本机使用模式（`linux_local`）：Core 与 Compute Worker 在同一台机器上通过本地桥接目录协作，
+  界面文案、示例路径与配对入口按平台区分；`install.sh --with-worker` 会登记本机计算节点，设备页直接可用。
+- ComfyUI 地址不再限制为本机：支持 `http(s)` 任意主机，并支持 `https://用户名:密码@主机` 形式的 HTTP Basic 认证。
+- 已知限制：LoRA 正式训练仍仅限 Windows；SMB 双机配对在 Linux 上用本地桥接目录代替。
 
 ### 1.1.1 预发布修复
 
