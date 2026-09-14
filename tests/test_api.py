@@ -386,7 +386,7 @@ def test_page_uses_scoped_headers_and_accessible_contrast(settings) -> None:
     assert '<header class="archive-header">' in page.text
     assert "    header {" not in page.text
     assert "--muted: #5b5a53;" in page.text
-    assert "--signal: #a33822;" in page.text
+    assert "--signal: #9a321f;" in page.text
     assert ".comfy-head .section-label, .comfy-head label { color: #b9ae9f; }" in page.text
 
 
