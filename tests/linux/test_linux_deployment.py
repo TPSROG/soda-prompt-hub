@@ -54,6 +54,28 @@ def _wait_health(port: int, timeout: float = 30.0) -> dict[str, object] | None:
     return None
 
 
+def _install_no_service(
+    env: dict[str, str], port: int, library: Path, *extra: str
+) -> subprocess.CompletedProcess[str]:
+    return _run(
+        "install.sh",
+        "--no-service",
+        "--port",
+        str(port),
+        "--library-root",
+        str(library),
+        *extra,
+        env=env,
+    )
+
+
+def _recorded_env(env: dict[str, str]) -> str:
+    """读取 install.env, 并把 printf %q 转义的空格还原成可读形式。"""
+    path = Path(env["XDG_DATA_HOME"]) / "soda-prompt-hub" / "install.env"
+    assert path.is_file(), f"缺少安装记录 {path}"
+    return path.read_text(encoding="utf-8").replace("\\ ", " ")
+
+
 @pytest.fixture
 def isolated(tmp_path: Path) -> dict[str, str]:
     """隔离的 HOME / XDG 环境, 保证不碰到开发机上真实的安装与服务。"""
@@ -107,10 +129,7 @@ def test_install_start_stop_cycle_keeps_program_and_data_separate(
     )
     assert install.returncode == 0, install.stdout + install.stderr
 
-    env_file = Path(isolated["XDG_DATA_HOME"]) / "soda-prompt-hub" / "install.env"
-    assert env_file.is_file()
-    # install.env 用 printf %q 写入, 空格会被转义成 "\ "
-    recorded = env_file.read_text(encoding="utf-8").replace("\\ ", " ")
+    recorded = _recorded_env(isolated)
     assert f"SPH_PORT={port}" in recorded
     assert str(library) in recorded
     assert "SPH_SERVICE=no" in recorded
@@ -138,3 +157,96 @@ def test_install_start_stop_cycle_keeps_program_and_data_separate(
     # 程序与用户数据分离: 数据由安装参数决定, 便利命令装进隔离的 HOME
     assert (library / "database" / "prompt-library.sqlite").is_file()
     assert (Path(isolated["HOME"]) / ".local" / "bin" / "soda-prompt-hub").is_file()
+
+
+def test_chinese_and_utf8_library_root(tmp_path: Path, isolated: dict[str, str]) -> None:
+    """主任务书 §12: Linux 路径、UTF-8 路径、空格路径、中文路径。"""
+    library = tmp_path / "资料库 测试-émoji"
+    port = _free_port()
+
+    install = _install_no_service(isolated, port, library)
+    assert install.returncode == 0, install.stdout + install.stderr
+    assert str(library) in _recorded_env(isolated)
+
+    start = _run("start.sh", env=isolated)
+    assert start.returncode == 0, start.stdout + start.stderr
+    try:
+        health = _wait_health(port)
+        assert health is not None, "中文 + UTF-8 + 空格路径下服务未就绪"
+        assert health["status"] == "ok"
+        assert str(library) in str(health["database"])
+    finally:
+        _run("stop.sh", env=isolated)
+
+    assert (library / "database" / "prompt-library.sqlite").is_file()
+
+
+def test_models_root_is_created_and_recorded(tmp_path: Path, isolated: dict[str, str]) -> None:
+    """主任务书 §12: PROMPT_HUB_MODELS_ROOT 必须真的被部署层接管。"""
+    library = tmp_path / "library"
+    models = tmp_path / "models root 模型"
+    port = _free_port()
+
+    install = _install_no_service(isolated, port, library, "--models-root", str(models))
+    assert install.returncode == 0, install.stdout + install.stderr
+    assert models.is_dir(), "--models-root 指定的目录未被创建"
+
+    recorded = _recorded_env(isolated)
+    assert f"SPH_MODELS_ROOT={models}" in recorded
+
+    unit_placeholder = (REPO_ROOT / "deploy" / "linux" / "soda-prompt-hub.service").read_text(
+        encoding="utf-8"
+    )
+    assert "Environment=PROMPT_HUB_MODELS_ROOT=__SPH_MODELS_ROOT__" in unit_placeholder
+
+
+def test_library_data_is_written_and_survives_restart(
+    tmp_path: Path, isolated: dict[str, str]
+) -> None:
+    """主任务书 §12: 创建 Library、读取 Library、写入数据。"""
+    library = tmp_path / "library"
+    port = _free_port()
+
+    install = _install_no_service(isolated, port, library)
+    assert install.returncode == 0, install.stdout + install.stderr
+    assert (library / "database").is_dir(), "安装未创建资料库目录"
+
+    start = _run("start.sh", env=isolated)
+    assert start.returncode == 0, start.stdout + start.stderr
+    assert _wait_health(port) is not None
+
+    # 写入
+    marker = library / "private" / "personal-prompts" / "写入测试.txt"
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text("内容 with UTF-8 ✓", encoding="utf-8")
+
+    # 重启服务
+    assert _run("stop.sh", env=isolated).returncode == 0
+    restart = _run("start.sh", env=isolated)
+    assert restart.returncode == 0, restart.stdout + restart.stderr
+    try:
+        assert _wait_health(port) is not None
+        # 读取: 数据仍在, 内容一致
+        assert marker.is_file()
+        assert marker.read_text(encoding="utf-8") == "内容 with UTF-8 ✓"
+        assert (library / "database" / "prompt-library.sqlite").stat().st_size > 0
+    finally:
+        _run("stop.sh", env=isolated)
+
+
+def test_localhost_hostname_also_serves_health(tmp_path: Path, isolated: dict[str, str]) -> None:
+    """主任务书 §12: localhost 与 127.0.0.1 都应可访问。"""
+    library = tmp_path / "library"
+    port = _free_port()
+
+    install = _install_no_service(isolated, port, library)
+    assert install.returncode == 0, install.stdout + install.stderr
+    start = _run("start.sh", env=isolated)
+    assert start.returncode == 0, start.stdout + start.stderr
+    try:
+        assert _wait_health(port) is not None
+        response = httpx.get(f"http://localhost:{port}/api/health", timeout=5.0)
+        assert response.status_code == 200
+        assert response.json()["status"] == "ok"
+    finally:
+        _run("stop.sh", env=isolated)
