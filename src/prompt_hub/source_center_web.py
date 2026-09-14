@@ -1,6 +1,12 @@
 SOURCE_CENTER_STYLES = r"""<style>
   .source-center-grid { display:grid; grid-template-columns:minmax(300px,.72fr) minmax(0,1.28fr); gap:18px; }
   .source-capture-panel,.source-ledger-panel,.source-capture-list-panel { padding:28px; background:var(--paper); box-shadow:var(--shadow); }
+  .source-backup-panel { grid-column:1/-1; padding:28px; border:1px solid var(--line); background:#d8d1bf; box-shadow:var(--shadow); }
+  .source-backup-grid { display:grid; grid-template-columns:minmax(260px,.8fr) minmax(0,1.2fr); gap:24px; align-items:end; }
+  .source-backup-actions { display:grid; gap:10px; }
+  .source-backup-actions input { width:100%; min-height:42px; border:1px solid var(--line); background:#fbf6ec; padding:10px; }
+  .source-backup-actions progress { width:100%; height:14px; accent-color:#586328; }
+  .source-backup-message { min-height:42px; margin:0; border-left:4px solid var(--acid); background:#30351f; padding:11px 13px; color:#f4eddf; font:800 10px/1.6 monospace; overflow-wrap:anywhere; }
   .source-capture-panel { background:var(--ink); color:var(--paper); }
   .source-capture-panel .section-label { color:#b9ae9f; }
   .source-center-heading { margin:8px 0 10px; font:700 34px/1.05 "Iowan Old Style",serif; letter-spacing:-.035em; }
@@ -45,7 +51,7 @@ SOURCE_CENTER_STYLES = r"""<style>
   .capture-delete-btn:hover:not(:disabled) { background:#b8332a; color:#fff; }
   .capture-delete-btn:disabled { border-color:var(--line); color:var(--muted); opacity:.6; cursor:not-allowed; }
   .source-center-empty { padding:28px; border:1px dashed var(--line); color:var(--muted); font-size:12px; line-height:1.6; }
-  @media(max-width:980px){.source-center-grid{grid-template-columns:1fr}.source-capture-list{grid-template-columns:repeat(2,minmax(0,1fr))}.source-ledger-row{grid-template-columns:minmax(160px,1fr) repeat(2,70px) auto}.source-ledger-license{grid-column:1/-1}}
+  @media(max-width:980px){.source-center-grid,.source-backup-grid{grid-template-columns:1fr}.source-capture-list{grid-template-columns:repeat(2,minmax(0,1fr))}.source-ledger-row{grid-template-columns:minmax(160px,1fr) repeat(2,70px) auto}.source-ledger-license{grid-column:1/-1}}
   @media(max-width:620px){.source-capture-panel,.source-ledger-panel,.source-capture-list-panel{padding:22px}.source-form-row,.source-capture-list{grid-template-columns:1fr}.source-ledger-row{grid-template-columns:1fr 1fr}.source-ledger-name,.source-ledger-license,.source-ledger-action{grid-column:1/-1}}
 </style>"""
 
@@ -78,6 +84,9 @@ SOURCE_CENTER_HTML = r"""
     <div class="source-ledger-summary" id="sourceLedgerSummary"></div>
     <div class="source-ledger" id="sourceLedger"><div class="source-center-empty">正在读取本地来源…</div></div>
   </section>
+  <section class="source-backup-panel" aria-labelledby="sourceBackupTitle">
+    <div class="source-backup-grid"><div><p class="section-label">个人资料维护</p><h2 class="source-center-heading" id="sourceBackupTitle">完整备份与自动校验</h2><p>备份项目、数据集、审核记录、资料来源和索引数据库。公共 Git 仓库、大模型权重与可重建缩略图不重复复制。</p><div class="source-ledger-summary" id="sourceBackupSummary"><span>正在估算资料大小…</span></div></div><div class="source-backup-actions"><label>备份到新目录（留空使用默认位置）<input id="sourceBackupDestination" placeholder="例如 D:\PromptHub-Backups\2026-09-14"></label><button class="source-capture-submit" id="sourceBackupStart" type="button">建立完整备份</button><button class="source-delete-btn" id="sourceBackupCancel" type="button" hidden>取消备份</button><progress id="sourceBackupProgress" hidden></progress><p class="source-backup-message" id="sourceBackupMessage" role="status" aria-live="polite">正在读取备份状态…</p></div></div>
+  </section>
   <section class="source-capture-list-panel">
     <p class="section-label">已经保存的网页资料</p>
     <div class="source-capture-list" id="sourceCaptureList"><div class="source-center-empty">正在读取网页资料…</div></div>
@@ -93,6 +102,7 @@ SOURCE_CENTER_SCRIPT = r"""<script>
   const safetyLabels={sfw:'普通',suggestive:'轻度成人向',adult:'成人向','explicit-adult':'明确成人向',unrated:'尚未分级'};
   const displayLicense=value=>!value||value==='unknown'?'未确认':value;
   const policyLabels={link_only:'只保存链接',cache_allowed:'允许离线缓存'};
+  let backupTimer=null;
   async function api(url,options){const r=await fetch(url,options),data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.detail||`请求失败：${r.status}`);return data;}
   function sourceType(item){return item.source_type==='web_capture'?'网页摘录':item.source_type==='git'?'本地 Git 库':item.source_type==='personal'?'个人资料':'本地资料';}
   function renderSources(items){
@@ -109,7 +119,12 @@ SOURCE_CENTER_SCRIPT = r"""<script>
   function renderCaptures(items){
     q('#sourceCaptureList').innerHTML=items.length?items.map(item=>`<article class="source-capture-card">${item.media_kind==='image'?`<img class="source-capture-visual" src="/api/web-captures/${encodeURIComponent(item.capture_id)}/media" alt="${esc(item.title)}" loading="lazy">`:''}<div class="source-capture-meta"><span>${esc(item.site_label||'网页')}</span><span>${esc(safetyLabels[item.safety]||'尚未分级')}</span><span class="${item.cached?'cached':''}">${item.cached?'已离线缓存':'只保存链接'}</span></div><h3>${esc(item.title||'未命名网页资料')}</h3><p>${esc(item.note||'没有个人备注')}</p><a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">打开原始网页 ↗</a><details><summary>查看来源与校验信息</summary>许可：${esc(displayLicense(item.license))}<br>保存时间：${esc(date(item.captured_at))}<br>内容 SHA-256：${esc(item.content_sha256||'—')}<br>保存方式：${esc(policyLabels[item.cache_policy]||'未记录')}</details><button type="button" class="capture-delete-btn" data-capture-id="${esc(item.capture_id)}" data-title="${esc(item.title||item.capture_id)}">删除这条摘录</button></article>`).join(''):'<div class="source-center-empty"><strong>还没有网页资料。</strong><br>把常用提示词页面、GitHub 提示词库文件或视觉参考直链保存到左侧。</div>';
   }
-  async function ensure(){const [sources,captures]=await Promise.all([api('/api/sources'),api('/api/web-captures')]);renderSources(sources);renderCaptures(captures);}
+  function bytes(value){const n=Number(value)||0; if(n>=1024**3)return `${(n/1024**3).toFixed(2)} GiB`; if(n>=1024**2)return `${(n/1024**2).toFixed(1)} MiB`; return `${Math.round(n/1024)} KiB`;}
+  function renderBackup(status){const job=status.latest_job,summary=q('#sourceBackupSummary'),message=q('#sourceBackupMessage'),progress=q('#sourceBackupProgress'),button=q('#sourceBackupStart'),cancel=q('#sourceBackupCancel'); summary.innerHTML=`<span>预计 ${bytes(status.estimated_bytes)}</span><span>可用 ${bytes(status.free_bytes)}</span><span>${status.enough_space?'空间充足':'空间不足'}</span><span>默认：${esc(status.default_parent)}</span>`; if(!job){message.textContent='尚未建立备份。可使用默认位置，也可填写一个尚不存在的新目录。';progress.hidden=true;cancel.hidden=true;button.disabled=!status.enough_space;return;} const active=['queued','running'].includes(job.status); button.disabled=active||!status.enough_space;cancel.hidden=!active;cancel.disabled=Boolean(job.cancel_requested);cancel.dataset.jobId=job.job_id;progress.hidden=!active;progress.max=Math.max(job.progress_total||1,1);progress.value=job.progress_current||0; if(active){message.textContent=job.cancel_requested?'正在安全取消；临时目录会清理。':job.progress_message||'备份任务正在准备';clearTimeout(backupTimer);backupTimer=setTimeout(loadBackup,1000);return;} if(job.status==='completed'){message.textContent=`备份和校验完成：${job.result.backup_path} · ${job.result.file_count} 个文件`;return;} if(job.status==='canceled'){message.textContent='备份已取消；未完成的临时目录已清理。';return;} message.textContent=`备份失败：${job.error||'未知错误'}；原资料未改动。`;}
+  async function loadBackup(){renderBackup(await api('/api/maintenance/backup-status'));}
+  async function ensure(){const [sources,captures]=await Promise.all([api('/api/sources'),api('/api/web-captures')]);renderSources(sources);renderCaptures(captures);await loadBackup();}
+  q('#sourceBackupStart').addEventListener('click',async()=>{const destination=q('#sourceBackupDestination').value.trim();if(!confirm(`建立一份完整个人资料备份？\n\n${destination?`目标：${destination}`:'使用页面显示的默认备份目录'}\n系统会复制并校验，不会改动当前资料。`))return;const button=q('#sourceBackupStart');button.disabled=true;q('#sourceBackupMessage').textContent='正在提交备份任务…';try{await api('/api/maintenance/backups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({destination})});await loadBackup();}catch(error){q('#sourceBackupMessage').textContent=`无法开始备份：${error.message}`;button.disabled=false;}});
+  q('#sourceBackupCancel').addEventListener('click',async event=>{const jobId=event.currentTarget.dataset.jobId;if(!jobId||!confirm('取消正在进行的备份？已完成的正式备份不会受影响，临时目录会清理。'))return;event.currentTarget.disabled=true;try{await api(`/api/jobs/${encodeURIComponent(jobId)}/cancel`,{method:'POST'});await loadBackup();}catch(error){q('#sourceBackupMessage').textContent=`取消请求失败：${error.message}`;event.currentTarget.disabled=false;}});
   q('#sourceCaptureForm').addEventListener('submit',async event=>{event.preventDefault();const button=event.currentTarget.querySelector('button'),message=q('#sourceCaptureMessage');button.disabled=true;button.textContent='正在核对并保存…';message.textContent='正在检查这个站点允许保存哪些内容。';try{const saved=await api('/api/web-captures',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:q('#sourceCaptureUrl').value,title:q('#sourceCaptureTitle').value,note:q('#sourceCaptureNote').value,safety:q('#sourceCaptureSafety').value,license_name:q('#sourceCaptureLicense').value})});message.textContent=saved.cached?'已经保存离线副本，并记录原始来源。':'已经保存链接、标题和个人备注；这个站点的正文或作品图没有下载。';q('#sourceCaptureUrl').value='';q('#sourceCaptureTitle').value='';q('#sourceCaptureNote').value='';await ensure();if(window.loadPromptHubStats)await window.loadPromptHubStats();}catch(error){message.textContent=error.message;}finally{button.disabled=false;button.textContent='＋ 保存这条网页资料';}});
 
   q('#sourceLedger').addEventListener('click', async event => {

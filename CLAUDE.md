@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Soda Prompt Hub是本机优先的AI绘图创作与数据集中枢。FastAPI Core管理提示词、OC、项目、结果和数据集。
 当前只支持两种产品模式：Mac管理Windows（SMB + 独立Worker），Windows单机（一个启动器管理Core/Worker与本地bridge）。
 数据保存在运行Core的设备；单机不另开独立Worker、不需要配对。训练本身不在本项目范围内。
-当前1.1.0桌面包的tag、签名与验收状态见[版本体系](docs/RELEASES.md)，不能把软件内stable当作原生手验完成。
+当前1.1.1桌面包的tag、签名与验收状态见[版本体系](docs/RELEASES.md)，不能把软件内stable当作原生手验完成。
 
 仓库文档以中文为主（README、`docs/`、DEVELOPMENT_PLAN 等），代码标识符与注释用英文，
 面向用户的 UI 文案用中文。新增内容请沿用同一约定。

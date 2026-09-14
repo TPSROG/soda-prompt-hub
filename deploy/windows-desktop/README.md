@@ -4,7 +4,7 @@
 在同一台Windows上管理Prompt Hub Core，默认自动准备并启动本机Compute Worker。用户可手动停止本机Worker，
 但不需要再开独立的Soda Compute Worker，也不经过SMB配对。
 
-普通用户请从[Windows单机Release](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-windows-standalone-20260913)
+普通用户请从[Windows单机Release](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.1-windows-standalone-20260914)
 下载Setup，按[快速开始](../../docs/QUICK_START.md)安装；下方构建命令仅供维护人员。
 
 ## 产品行为
@@ -33,5 +33,5 @@ Set-ExecutionPolicy -Scope Process Bypass
 `deploy/windows-installer/build.ps1` 把它转换为包含固定 Python runtime、依赖和 WebView2 bootstrapper 的
 per-user Setup；最终用户不需要 `.NET Runtime`、Python、`uv` 或 SDK。
 
-版本从根 `RELEASE.json` / `pyproject.toml` 读取，当前保持 `1.1.0`。发布包含 Core、Worker、共享 UI
+版本从根 `RELEASE.json` / `pyproject.toml` 读取，当前源码候选为 `1.1.1`。发布包含 Core、Worker、共享 UI
 和三层 SHA-256 manifest，但不包含用户数据库、模型、真实 `worker-config.json` 或凭据。

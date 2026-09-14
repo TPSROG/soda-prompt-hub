@@ -4,7 +4,7 @@ Soda Prompt Hub 是一套本机优先的 AI 绘图创作与数据集整理工具
 保存提示词、视觉参照、OC、创作项目、结果图、Caption、审核记录和冻结版本；Windows Worker 可以把
 经过确认的任务交给本机 ComfyUI，也可以与另一台设备配合。LoRA 正式训练仍在 Windows 的训练工具中完成。
 
-软件版本保持 `1.1.0`。2026-09-13 桌面构建已发布为 **Pre-release（待手动验收）**，
+当前源码版本为 `1.1.1`。2026-09-14 第一版桌面安装包以 **Pre-release（待手动验收）** 发布，
 未正式平台签名；软件里显示的 stable 不代表这批安装包已经完成原生人工验收。
 版本与构建标识的区别见[正式版本体系](docs/RELEASES.md)。
 
@@ -12,8 +12,8 @@ Soda Prompt Hub 是一套本机优先的 AI 绘图创作与数据集整理工具
 
 | 使用方式 | 下载 | 要运行的应用 |
 | --- | --- | --- |
-| Mac 管理 Windows | [Mac 启动器 + Windows Worker](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-mac-windows-20260913) | Mac 安装 DMG；Windows 安装并打开 Soda Compute Worker |
-| Windows 单机 | [Windows Desktop](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-windows-standalone-20260913) | 只安装并打开 Soda Prompt Hub，自动管理本机 Core / Worker |
+| Mac 管理 Windows | [Mac 启动器 + Windows Worker](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.1-mac-windows-20260914) | Mac 安装 DMG；Windows 安装并打开 Soda Compute Worker |
+| Windows 单机 | [Windows Desktop](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.1-windows-standalone-20260914) | 只安装并打开 Soda Prompt Hub，自动管理本机 Core / Worker |
 
 Mac 包面向 Apple Silicon（arm64），Windows 包面向 x64。下载 Release 的 Assets 中的 DMG / Setup，
 不是 GitHub 自动生成的 Source code ZIP。每套附有 `SHA256SUMS` 和手动验收说明。
@@ -27,7 +27,7 @@ Windows 单机**不需要另开独立 Worker，也不需要 SMB 配对**。两�
 4. 启动台显示 Core 已就绪后打开工作台，确认实时 Worker / ComfyUI 状态。最终用户无需预装 Python、`uv`、Git 或 `.NET SDK`。
 5. 按需安装资料库和可选模型；外部 AI 服务的 URL、Key 与模型在“设备连接 → 模型服务”配置。
 
-完整安装步骤见[快速开始](docs/QUICK_START.md)，新包测试见[手动验收](docs/acceptance/manual-1.1.0-20260913.md)。
+完整安装步骤见[快速开始](docs/QUICK_START.md)，1.1.1 候选测试见[pre1 手动验收](docs/acceptance/manual-1.1.1-pre1-20260914.md)。
 
 程序默认只监听本机 `127.0.0.1`。新用户的个人资料默认保存在：
 
@@ -78,6 +78,7 @@ macOS 钥匙串保存，Prompt Hub 不读取密码。更完整的文件关系见
 | 第一次安装，先把页面打开 | [快速开始](docs/QUICK_START.md) |
 | 下载、安装、升级或卸载商业包 | [商业分发与安装说明](docs/COMMERCIAL_RELEASE.md) |
 | 从灵感到出图、复盘和数据集 | [核心工作流](docs/WORKFLOWS.md) |
+| 按页面顺序完成日常操作 | [用户使用说明书草稿](docs/USER_MANUAL_DRAFT.md) |
 | 启动、停止、备份、恢复和安全更新 | [Mac 使用与维护](docs/MAC_GUIDE.md) |
 | 在 Windows 安装、自检和启动 Worker | [Windows Worker 完整指南](docs/WINDOWS_WORKER.md) |
 | 按需安装 WD14、真人打标和 CLIP | [可选本地模型](docs/OPTIONAL_MODELS.md) |
@@ -88,7 +89,7 @@ macOS 钥匙串保存，Prompt Hub 不读取密码。更完整的文件关系见
 | 页面打不开、共享盘断开或任务不动 | [常见问题与排错](docs/TROUBLESHOOTING.md) |
 | 版本号、更新通道和发布检查 | [正式版本体系](docs/RELEASES.md) |
 | 查看长期开发边界和历史路线 | [开发计划](DEVELOPMENT_PLAN.md) |
-| 安装新包后手动验收两种模式 | [当前验收清单](docs/acceptance/manual-1.1.0-20260913.md) |
+| 安装新包后手动验收两种模式 | [1.1.1 pre1 验收清单](docs/acceptance/manual-1.1.1-pre1-20260914.md) |
 
 ## 当前边界
 

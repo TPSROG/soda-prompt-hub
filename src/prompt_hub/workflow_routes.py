@@ -194,7 +194,12 @@ def create_workflow_router(
                 outcome = comfy_store.import_bytes(
                     image_path.read_bytes(),
                     filename=image_path.name,
-                    source_path=relative,
+                    origin={
+                        "source_kind": "worker_return",
+                        "source_root": str(image_path.parent),
+                        "source_path": relative,
+                        "import_batch_id": task_id,
+                    },
                 )
                 duplicates += int(outcome["duplicate"])
                 result = outcome["result"]

@@ -6,6 +6,8 @@ import os
 import shutil
 import sqlite3
 import subprocess
+from collections.abc import Callable
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -14,6 +16,7 @@ from urllib.request import urlopen
 from uuid import uuid4
 
 if TYPE_CHECKING:
+    from prompt_hub.background_jobs import JobContext
     from prompt_hub.config import Settings
 
 BACKUP_FORMAT = "soda-prompt-hub-backup-v1"
@@ -55,13 +58,31 @@ class BackupManager:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    def create(self, destination: Path | None = None) -> dict[str, Any]:
+    def status(self) -> dict[str, Any]:
+        parent = self._default_destination().parent
+        required_bytes = _selected_size(self.settings.library_root)
+        free_bytes = shutil.disk_usage(self.settings.library_root.parent).free
+        return {
+            "default_parent": str(parent.resolve()),
+            "estimated_bytes": required_bytes,
+            "free_bytes": free_bytes,
+            "enough_space": free_bytes >= required_bytes + 256 * 1024 * 1024,
+        }
+
+    def create(  # noqa: C901 - backup phases stay together so cleanup covers every failure.
+        self,
+        destination: Path | None = None,
+        *,
+        context: JobContext | None = None,
+    ) -> dict[str, Any]:
         target = destination or self._default_destination()
         target = target.expanduser().resolve()
         if target.exists():
             raise MaintenanceError("备份目标已存在，请使用新的目录")
         target.parent.mkdir(parents=True, exist_ok=True)
         required_bytes = _selected_size(self.settings.library_root)
+        if context:
+            context.update(0, max(required_bytes, 1), "正在检查备份空间与数据库")
         free_bytes = shutil.disk_usage(target.parent).free
         if free_bytes < required_bytes + 256 * 1024 * 1024:
             raise MaintenanceError("备份目标磁盘剩余空间不足")
@@ -71,15 +92,47 @@ class BackupManager:
         try:
             payload.mkdir(parents=True, exist_ok=False)
             sqlite_reports = self._snapshot_databases(payload)
+            copied_bytes = sum(
+                path.stat().st_size
+                for path in (
+                    payload / "database" / "prompt-library.sqlite",
+                    payload / "indexes" / "embeddings" / "embeddings.sqlite",
+                )
+                if path.is_file()
+            )
+
+            def report_copy(size: int, relative_path: str) -> None:
+                nonlocal copied_bytes
+                copied_bytes += size
+                if context:
+                    context.update(
+                        min(copied_bytes, max(required_bytes, 1)),
+                        max(required_bytes, 1),
+                        f"正在复制个人资料：{relative_path}",
+                    )
+
             for relative in PERSONAL_ROOTS:
+                if context:
+                    context.raise_if_cancelled()
                 source = self.settings.library_root / relative
                 if source.exists():
                     excluded = tuple(
                         self.settings.library_root / cache_root
                         for cache_root in REBUILDABLE_CACHE_ROOTS
                     )
-                    _copy_tree(source, payload / relative, excluded_roots=excluded)
-            files = _file_manifest(payload)
+                    _copy_tree(
+                        source,
+                        payload / relative,
+                        excluded_roots=excluded,
+                        on_file=report_copy,
+                    )
+            if context:
+                context.update(
+                    max(required_bytes, 1),
+                    max(required_bytes, 1),
+                    "文件已复制，正在生成哈希清单并校验",
+                )
+            files = _file_manifest(payload, context=context)
             manifest = {
                 "format": BACKUP_FORMAT,
                 "created_at": _now(),
@@ -101,7 +154,7 @@ class BackupManager:
             if temporary.exists():
                 shutil.rmtree(temporary)
             raise
-        return {"backup_path": str(target), **verification}
+        return {"backup_path": str(target), "estimated_bytes": required_bytes, **verification}
 
     def restore_to_new_directory(self, backup_path: Path, destination: Path) -> dict[str, Any]:
         source = backup_path.expanduser().resolve()
@@ -146,9 +199,11 @@ class BackupManager:
             if not source.is_file():
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
+            # sqlite3.Connection.__exit__ commits or rolls back, but does not close.
+            # Windows therefore keeps the snapshot files locked during rename/cleanup.
             with (
-                sqlite3.connect(source) as source_connection,
-                sqlite3.connect(target) as target_connection,
+                closing(sqlite3.connect(source)) as source_connection,
+                closing(sqlite3.connect(target)) as target_connection,
             ):
                 source_connection.backup(target_connection)
             integrity = _sqlite_integrity(target, immutable=True)
@@ -227,6 +282,7 @@ def _copy_tree(
     destination: Path,
     *,
     excluded_roots: tuple[Path, ...] = (),
+    on_file: Callable[[int, str], None] | None = None,
 ) -> None:
     if source.is_symlink():
         return
@@ -236,6 +292,8 @@ def _copy_tree(
     if source.is_file():
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, destination)
+        if on_file:
+            on_file(source.stat().st_size, source.name)
         return
     destination.mkdir(parents=True, exist_ok=True)
     for path in sorted(source.rglob("*")):
@@ -247,18 +305,28 @@ def _copy_tree(
         target = destination / path.relative_to(source)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, target)
+        if on_file:
+            on_file(path.stat().st_size, path.relative_to(source).as_posix())
 
 
-def _file_manifest(root: Path) -> list[dict[str, Any]]:
+def _file_manifest(
+    root: Path,
+    *,
+    context: JobContext | None = None,
+) -> list[dict[str, Any]]:
     paths = sorted(item for item in root.rglob("*") if item.is_file() and not item.is_symlink())
-    return [
-        {
-            "path": path.relative_to(root).as_posix(),
-            "bytes": path.stat().st_size,
-            "sha256": _sha256(path),
-        }
-        for path in paths
-    ]
+    result = []
+    for path in paths:
+        if context:
+            context.raise_if_cancelled()
+        result.append(
+            {
+                "path": path.relative_to(root).as_posix(),
+                "bytes": path.stat().st_size,
+                "sha256": _sha256(path),
+            }
+        )
+    return result
 
 
 def _selected_size(library_root: Path) -> int:
@@ -296,9 +364,11 @@ def _sha256(path: Path) -> str:
 def _sqlite_integrity(path: Path, *, immutable: bool = False) -> str:
     try:
         immutable_flag = "&immutable=1" if immutable else ""
-        with sqlite3.connect(
-            f"file:{path}?mode=ro{immutable_flag}",
-            uri=True,
+        with closing(
+            sqlite3.connect(
+                f"file:{path}?mode=ro{immutable_flag}",
+                uri=True,
+            )
         ) as connection:
             row = connection.execute("PRAGMA integrity_check").fetchone()
         return str(row[0]) if row else "no result"

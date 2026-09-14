@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-usage-mode="__PROMPT_HUB_USAGE_MODE__">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -71,8 +71,9 @@ __PROMPT_HUB_BASE_STYLES__  </style>
           <div class="home-first-guide-step"><b>01</b><strong>先写想法或选 OC</strong><span>在创作台新建项目，也可以先从角色库导入 OC Manager JSON。</span></div>
           <div class="home-first-guide-step"><b>02</b><strong>找提示词和参考图</strong><span>去提示词库或智能检索，挑选服装、动作、构图、灯光和画风。</span></div>
           <div class="home-first-guide-step"><b>03</b><strong>整理两种 Prompt</strong><span>同一份创作意图分别检查 Anima 标签和 Krea 2 自然语言版本。</span></div>
-          <div class="home-first-guide-step"><b>04</b><strong>需要时交给 Windows 出图</strong><span>Windows 开机并运行 Worker 后再发送；离线时可以继续整理本地内容。</span></div>
-          <div class="home-first-guide-step"><b>05</b><strong>精选、打标并交付数据集</strong><span>结果图回到 Mac 后人工筛选，检查 WD14 草稿，最后冻结并导出版本。</span></div>
+          <div class="home-first-guide-step" data-usage-only="mac_remote"><b>04</b><strong>需要时交给 Windows 出图</strong><span>Windows 开机并运行 Worker 后再发送；离线时可以继续整理本地内容。</span></div>
+          <div class="home-first-guide-step" data-usage-only="windows_local"><b>04</b><strong>连接本机 ComfyUI 出图</strong><span>Worker 随启动器自动运行；在启动器设置中填写 ComfyUI 地址，无需配对其他设备。</span></div>
+          <div class="home-first-guide-step"><b>05</b><strong>精选、打标并交付数据集</strong><span>结果图导入后人工筛选，检查 WD14 草稿，最后冻结并导出版本。</span></div>
         </div>
       </details>
       <section class="home-source-setup" id="homeSourceSetup" aria-labelledby="homeSourceSetupTitle" hidden>
@@ -90,7 +91,8 @@ __PROMPT_HUB_BASE_STYLES__  </style>
       </section>
       <div class="home-footnote">
         <p><strong id="homeReleaseIdentity">Soda Prompt Hub：</strong>创作、资料引用、双格式输出、远程出图、结果回流与数据集交付已经形成完整闭环。</p>
-        <p><strong>设备分工：</strong>Mac 负责整理、审核与保存记录； <span data-remote-device-name data-i18n-ignore>__PROMPT_HUB_DEVICE_NAME_HTML__</span> 的 ComfyUI 负责生成与测试。</p>
+        <p data-usage-only="mac_remote"><strong>设备分工：</strong>Mac 负责整理、审核与保存记录； <span data-remote-device-name data-i18n-ignore>__PROMPT_HUB_DEVICE_NAME_HTML__</span> 的 ComfyUI 负责生成与测试。</p>
+        <p data-usage-only="windows_local"><strong>Windows 单机模式：</strong>创作、审核与数据保存都在这台电脑完成；启动器自动管理 Worker，只需连接本机 ComfyUI。</p>
       </div>
     </section>
 

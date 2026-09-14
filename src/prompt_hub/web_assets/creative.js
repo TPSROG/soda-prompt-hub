@@ -194,7 +194,7 @@
     const loaded = option.textContent.trim().startsWith('●');
     $('#resultModelHint').textContent = loaded
       ? '● 当前视觉模型已加载，可以直接分析图片。'
-      : '○ 当前模型尚未加载。24GB Mac 请先在 LM Studio 卸载文字模型，再只加载这一只视觉模型。';
+      : '○ 当前模型尚未加载。请先在模型服务中加载所选视觉模型；内存不足时卸载其他模型。';
   }
 
   function updateWd14TaggerMode() {
@@ -354,7 +354,7 @@
     if (!profileId) throw new Error('当前模型类型还没有可用的 ComfyUI 工作流');
     const button = $('#sendWorkflow'); button.disabled = true; button.textContent = '正在投递…';
     creativeState.workflowMessageProjectId = creativeState.project.project_id;
-    creativeState.workflowMessage = `正在把生成包保存到 Mac，并发送到 ${deviceName()}…`; renderWorkflowProfiles();
+    creativeState.workflowMessage = `正在保存生成包，并发送到 ${deviceName()}…`; renderWorkflowProfiles();
     try {
       const result = await creativeJson(`/api/workflow-profiles/${encodeURIComponent(profileId)}/tasks`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({project_id:creativeState.project.project_id, low_cost:$('#workflowLowCost').checked})});
       creativeState.workflowMessage = `已发送“${result.profile.label}”。请到“设备连接”的任务状态查看进度和回传图片。`; await refreshProjectJourney();

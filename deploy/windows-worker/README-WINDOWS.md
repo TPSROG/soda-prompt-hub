@@ -2,12 +2,12 @@
 
 ## 先看你拿到哪种包
 
-- 普通用户使用[Mac + Windows Worker Release](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-mac-windows-20260913)中的Worker Setup：内置Python，从开始菜单打开控制台，不要求运行bat或自行装Python。
-- Windows单机使用[Desktop Release](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-windows-standalone-20260913)，由同一个启动器管理Core/Worker，不另开独立Worker。
-- 本文下面的ZIP、脚本和Python准备步骤只适用于维护人员拿到的纯脚本/便携包；不代表2026-09-13 Release另有该ZIP附件。
+- 普通用户使用[Mac + Windows Worker Release](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.1-mac-windows-20260914)中的Worker Setup：内置Python，从开始菜单打开控制台，不要求运行bat或自行装Python。
+- Windows单机使用[Desktop Release](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.1-windows-standalone-20260914)，由同一个启动器管理Core/Worker，不另开独立Worker。
+- 本文下面的ZIP、脚本和Python准备步骤只适用于维护人员拿到的纯脚本/便携包；不代表普通用户Release另有该ZIP附件。
 
-2026-09-13两套安装包均是保持软件1.1.0的Pre-release，未正式平台签名，完整原生手验待完成。
-下载安装前核对Release的SHA256SUMS；同1.1.0不等于相同构建。
+2026-09-14两套1.1.1安装包均为Pre-release，未正式平台签名，高成本原生手验待完成。
+下载安装前核对Release的SHA256SUMS；相同产品版本也不代表相同构建。
 
 这个目录是可以独立放到 Windows 上运行的 Worker 发布包。它通过 SMB 共享目录接收 Mac 发来的
 任务，只访问 Windows 本机的 ComfyUI，不需要把 ComfyUI 开放到局域网。

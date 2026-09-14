@@ -17,6 +17,34 @@ def run_js(script: str) -> None:
     subprocess.run([node, "-e", script], check=True)  # noqa: S603 - repository script and fixed harness
 
 
+def test_export_history_hides_transfer_only_in_standalone_mode() -> None:
+    script = WORKSPACE_SCRIPT[
+        WORKSPACE_SCRIPT.index("  function renderExports()") : WORKSPACE_SCRIPT.index(
+            "  function renderStagePanels("
+        )
+    ]
+    run_js(
+        script
+        + r"""
+const assert=require('node:assert/strict');
+const window={isPromptHubLocal:true}, output={innerHTML:''};
+const $=id=>id==='#datasetDeliveryProfile'?{value:'anima'}:output;
+const escapeHtml=value=>String(value||''), formatNumber=String, formatDatasetBytes=String;
+const deviceName=()=> 'QA Windows';
+const state={exports:[{version_id:'qa',profile_id:'anima',image_count:1,
+ file_count:2,total_bytes:123,directory_available:true,download_url:'/qa.zip'}]};
+renderExports();
+assert.ok(output.innerHTML.includes('下载 ZIP'));
+assert.ok(output.innerHTML.includes('打开所在文件夹'));
+assert.ok(!output.innerHTML.includes('data-export-action="copy"'));
+assert.ok(output.innerHTML.includes('无需跨设备复制'));
+window.isPromptHubLocal=false;renderExports();
+assert.ok(output.innerHTML.includes('data-export-action="copy"'));
+assert.ok(output.innerHTML.includes('复制到 QA Windows'));
+"""
+    )
+
+
 def test_approve_unchanged_captions_and_do_not_approve_on_failed_save() -> None:
     script = WORKSPACE_SCRIPT[
         WORKSPACE_SCRIPT.index("  async function saveDetail(") : WORKSPACE_SCRIPT.index(
@@ -105,3 +133,30 @@ const renderResultGallery=()=>{},refreshProjectJourney=async()=>{};
 })().catch(error=>{console.error(error);process.exitCode=1;});
 """
     )
+
+
+def test_krea2_translation_prefers_visual_draft_then_formal_caption() -> None:
+    script = WORKSPACE_SCRIPT[
+        WORKSPACE_SCRIPT.index("  function krea2TranslationSource(") : WORKSPACE_SCRIPT.index(
+            "  function restoreKrea2Locale("
+        )
+    ]
+    run_js(
+        script
+        + r"""
+const assert=require('node:assert/strict');
+const fields={draft:{value:'  visual draft  '},formal:{value:'  formal caption  '}};
+const $=id=>id==='#datasetDetailKrea2Draft'?fields.draft:fields.formal;
+assert.deepEqual(krea2TranslationSource(),{caption:'visual draft',label:'视觉模型草稿'});
+fields.draft.value='';
+assert.deepEqual(krea2TranslationSource(),{caption:'formal caption',label:'正式 Krea 2 说明'});
+fields.formal.value='';
+assert.deepEqual(krea2TranslationSource(),{caption:'',label:''});
+"""
+    )
+
+
+def test_remote_task_page_polls_until_cancel_reaches_final_state() -> None:
+    assert "function scheduleTaskPoll" in REMOTE_SCRIPT
+    assert "['recorded','queued','running','returned']" in REMOTE_SCRIPT
+    assert "取消时间" in REMOTE_SCRIPT

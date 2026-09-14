@@ -50,6 +50,8 @@ from prompt_hub.local_visual import (
 )
 from prompt_hub.lora_projects import LoraProjectStore
 from prompt_hub.lora_routes import create_lora_router
+from prompt_hub.maintenance import BackupManager
+from prompt_hub.maintenance_routes import backup_job, create_maintenance_router
 from prompt_hub.media import resolve_media_path
 from prompt_hub.model_connections import MODEL_REF_PATTERN, ModelConnectionStore
 from prompt_hub.model_routes import create_model_router
@@ -261,6 +263,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         locale_cache=tag_locale_cache,
     )
     optional_models = OptionalModelInstaller(active_settings, job_store)
+    backup_manager = BackupManager(active_settings)
     job_runner = BackgroundJobRunner(
         job_store,
         {
@@ -274,6 +277,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "local_visual_index": local_visual.job,
             **optional_models.handlers(),
             TAG_DOWNLOAD_JOB_TYPE: tag_store.download_job,
+            "personal_backup": backup_job(backup_manager),
         },
     )
 
@@ -363,6 +367,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
     )
     application.include_router(create_tag_completion_router(tag_store, job_runner))
+    application.include_router(create_maintenance_router(backup_manager, job_store, job_runner))
 
     @application.get("/", response_class=HTMLResponse, include_in_schema=False)
     def index() -> str:

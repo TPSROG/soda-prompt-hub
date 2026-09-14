@@ -1,17 +1,17 @@
 # 商业分发与安装说明
 
-Soda Prompt Hub 1.1.0 有三种应用组件，按两种使用方式分发：
+Soda Prompt Hub 1.1.1 有三种应用组件，按两种使用方式分发。2026-09-14 第一批安装包为 Pre-release：
 
-- [Mac 启动器 + Windows Worker](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-mac-windows-20260913)。
-- [Windows 单机版](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-windows-standalone-20260913)。
+- [Mac 启动器 + Windows Worker](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.1-mac-windows-20260914)。
+- [Windows 单机版](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.1-windows-standalone-20260914)。
 
-2026-09-13这两套都是 **Pre-release（待手动验收）**，不是已完成全部原生验收的商业正式发行。
+两套公开下载都是 **Pre-release（待手动验收）**，不是已完成全部原生验收的商业正式发行。
 
 | 产品 | 适用场景 | 分发文件 |
 |---|---|---|
-| Mac Desktop | 在 Mac 本机管理资料和创作 | `Soda-Prompt-Hub-1.1.0-macOS-arm64.dmg` |
-| Windows Desktop | 在一台 Windows 设备上独立管理和创作 | `Soda-Prompt-Hub-Desktop-1.1.0-Setup.exe` |
-| Windows Compute Worker | 双机模式下接收 Mac 任务并调用 Windows 本机 ComfyUI | `Soda-Compute-Worker-1.1.0-Setup.exe` |
+| Mac Desktop | 在 Mac 本机管理资料和创作 | `Soda-Prompt-Hub-1.1.1-macOS-arm64.dmg` |
+| Windows Desktop | 在一台 Windows 设备上独立管理和创作 | `Soda-Prompt-Hub-Desktop-1.1.1-Setup.exe` |
+| Windows Compute Worker | 双机模式下接收 Mac 任务并调用 Windows 本机 ComfyUI | `Soda-Compute-Worker-1.1.1-Setup.exe` |
 
 Windows 单机版自动准备本地任务目录并管理 Core / Worker，不要求 SMB、不另开独立 Worker。
 Mac 管理 Windows 时才安装独立 Worker 并配置共享。Mac 在 Windows 离线时仍可整理本地资料。
@@ -76,7 +76,7 @@ Windows Desktop 和 Worker 的主界面、托盘菜单都可以导出诊断 ZIP�
 
 ## 维护者发布检查
 
-1. 确认 `pyproject.toml`、根 `RELEASE.json` 和 Worker `RELEASE.json` 都是 `1.1.0 stable`。
+1. 确认 `pyproject.toml`、根 `RELEASE.json` 和 Worker `RELEASE.json` 都是目标版本；当前候选为 `1.1.1 stable`。
 2. 在 Windows 构建两个 Setup，并核对 Microsoft WebView2 bootstrapper 的有效签名。
 3. 在 Mac 构建自包含 DMG，运行 `hdiutil verify`，并验证 App 内 `MANIFEST.sha256`。
 4. 在 Windows 实机执行 `deploy/windows-installer/test-lifecycle.ps1`，验证覆盖安装、包内 Python、卸载保留
@@ -86,6 +86,6 @@ Windows Desktop 和 Worker 的主界面、托盘菜单都可以导出诊断 ZIP�
 7. 发布前扫描绝对个人路径、凭据、真实 `worker-config.json`、`.venv`、`__pycache__` 与 `.pyc`。
 
 Windows Authenticode、Mac Developer ID 与 notarization 延后处理，但不能据此断言“只差签名”。
-完整新安装包原生验收仍需按[手动清单](acceptance/manual-1.1.0-20260913.md)完成；源码测试与构建成功不能替代它。
+1.1.1 新安装包原生验收按[pre1 手动清单](acceptance/manual-1.1.1-pre1-20260914.md)执行；源码测试与构建成功不能替代它。
 对外商业再分发还需核对第三方组件许可及源码提供义务，尤其随包 Git，见[安装器分发边界](../deploy/windows-installer/README.md#当前刻意保留的限制)。
 完成签名后仍需重新执行安装、升级、卸载和 hash 验收。

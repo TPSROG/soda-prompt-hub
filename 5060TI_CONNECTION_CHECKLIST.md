@@ -1,7 +1,7 @@
 # 5060 Ti Windows 设备连接与配合清单
 
 > 历史方案（2026-09-02），不作为当前安装或接入验收要求。以下“尚未完成”是当时的状态，不是现在的结论。
-> 当前只支持Mac管理Windows与Windows单机两种方式，见[快速开始](docs/QUICK_START.md)和[新包验收清单](docs/acceptance/manual-1.1.0-20260913.md)。
+> 当前只支持Mac管理Windows与Windows单机两种方式，见[快速开始](docs/QUICK_START.md)和[新包验收清单](docs/acceptance/manual-1.1.1-pre1-20260914.md)。
 > 历史方案中的训练smoke test、远程WD14/Embedding/VLM不属于当前独立Worker的已实现接入承诺；不要按下面路线自动启动训练。
 
 更新时间：2026-09-02

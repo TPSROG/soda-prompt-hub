@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
 import time
 from pathlib import Path
 from threading import Event
@@ -9,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image, ImageEnhance
 
+from prompt_hub import workspace_routes
 from prompt_hub.api import create_app
 from prompt_hub.background_jobs import BackgroundJobStore, JobContext
 from prompt_hub.dataset_workspace import DatasetWorkspaceError, DatasetWorkspaceStore
@@ -251,7 +253,7 @@ def test_dataset_export_history_reveal_and_controlled_smb_copy(
         revealed.append(path)
 
     monkeypatch.setattr(
-        "prompt_hub.workspace_routes._reveal_in_finder",
+        "prompt_hub.workspace_routes._reveal_in_file_manager",
         record_reveal,
     )
 
@@ -467,6 +469,39 @@ def test_workspace_reports_when_its_source_is_gone(tmp_path, settings) -> None:
     shutil.rmtree(source)
     assert store.get(workspace["workspace_id"])["source_available"] is False
     assert store.list_workspaces()[0]["source_available"] is False
+
+
+@pytest.mark.parametrize(
+    ("platform", "expected"),
+    [
+        ("darwin", ["/usr/bin/open", "-R"]),
+        ("win32", ["explorer.exe", "/select,"]),
+        ("linux", ["xdg-open"]),
+    ],
+)
+def test_reveal_export_uses_native_file_manager(platform, expected, tmp_path, monkeypatch) -> None:
+    exported = tmp_path / "version" / "manifest.json"
+    exported.parent.mkdir()
+    exported.write_text("{}", encoding="utf-8")
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(workspace_routes.sys, "platform", platform)
+    monkeypatch.setattr(workspace_routes.subprocess, "run", run)
+    workspace_routes._reveal_in_file_manager(exported)  # noqa: SLF001
+
+    assert calls
+    assert calls[0][0][: len(expected)] == expected
+    assert calls[0][1]["creationflags"] == getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
+def test_reveal_export_reports_unsupported_platform(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(workspace_routes.sys, "platform", "plan9")
+    with pytest.raises(workspace_routes.HTTPException, match="不支持"):
+        workspace_routes._reveal_in_file_manager(tmp_path)  # noqa: SLF001
 
 
 def test_availability_is_not_written_back_into_the_manifest(tmp_path, settings) -> None:

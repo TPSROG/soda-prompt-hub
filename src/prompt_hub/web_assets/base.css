@@ -1,3 +1,9 @@
+    html[data-usage-mode="windows_local"] [data-usage-only="mac_remote"],
+    html[data-usage-mode="mac_remote"] [data-usage-only="windows_local"],
+    html[data-usage-mode="windows_local"] #pairingEntry,
+    html[data-usage-mode="windows_local"] #pairingDialog,
+    html[data-usage-mode="windows_local"] #remoteNodeGrid .remote-form,
+    html[data-usage-mode="windows_local"] #remoteNodeGrid .remote-actions { display: none !important; }
     :root {
       --ink: #171815;
       --paper: #ece8dc;

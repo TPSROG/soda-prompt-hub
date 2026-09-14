@@ -13,7 +13,7 @@ from prompt_hub.api import create_app
 from prompt_hub.background_jobs import BackgroundJobRunner, BackgroundJobStore, JobCancelledError
 from prompt_hub.comfy_results import ComfyResultError, ComfyResultStore
 from prompt_hub.creative_web_layout import CREATIVE_HTML
-from prompt_hub.remote_web import REMOTE_SCRIPT
+from prompt_hub.remote_web import REMOTE_HTML, REMOTE_SCRIPT
 
 
 def test_local_mode_only_hides_device_pairing_forms() -> None:
@@ -24,7 +24,8 @@ def test_local_mode_only_hides_device_pairing_forms() -> None:
 def test_device_connection_name_stays_the_same_in_local_mode() -> None:
     assert "[data-view=\"remote\"]').textContent='本机计算'" not in REMOTE_SCRIPT
     assert "page.querySelector('h1').textContent='设备连接'" in REMOTE_SCRIPT
-    assert "Windows 单机模式" in REMOTE_SCRIPT
+    assert "Windows 单机模式" in REMOTE_HTML
+    assert 'data-usage-only="windows_local"' in REMOTE_HTML
 
 
 def test_creative_assist_uses_ai_completion_name() -> None:
@@ -58,7 +59,8 @@ def test_scan_job_is_async_exclusive_and_cancelable(settings, tmp_path) -> None:
     source.mkdir()
     entered, release = Event(), Event()
 
-    def scan(_self, _path, *, context=None):
+    def scan(_self, _path, *, context=None, import_batch_id=""):
+        assert import_batch_id.startswith("scan-")
         context.update(0, 2, "扫描测试")
         entered.set()
         assert release.wait(5)
