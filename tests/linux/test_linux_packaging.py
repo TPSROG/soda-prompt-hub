@@ -192,3 +192,55 @@ def test_environment_checker_covers_required_signals() -> None:
     checker = (REPO_ROOT / "scripts" / "linux" / "check-env.sh").read_text(encoding="utf-8")
     for signal in ("Linux", "systemctl --user", "uv", "python3", "PROMPT_HUB_LIBRARY_ROOT"):
         assert signal in checker
+
+
+def _workflow(name: str) -> str:
+    return (REPO_ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
+
+
+def test_linux_workflow_runs_existing_checks_and_deployment_smoke() -> None:
+    """主任务书 §13: 执行项目既有的检查命令, 并跑 Linux 专用测试与部署冒烟。"""
+    workflow = _workflow("linux.yml")
+    for command in (
+        "uv sync --locked",
+        "uv run ruff format --check .",
+        "uv run ruff check .",
+        "uv run ty check src/",
+        "uv run pytest",
+    ):
+        assert command in workflow, f"linux.yml 缺少 {command}"
+    assert "ubuntu-22.04" in workflow
+    assert "ubuntu-24.04" in workflow
+    assert "./deploy/linux/install.sh --no-service" in workflow
+    assert "./deploy/linux/start.sh" in workflow
+    assert "./deploy/linux/stop.sh" in workflow
+    assert "systemctl --user status soda-prompt-hub" in workflow
+    # 主任务书 §13: 不要擅自引入新的 lint 工具
+    for forbidden in ("flake8", "pylint", "mypy", "eslint"):
+        assert forbidden not in workflow, f"linux.yml 引入了新工具 {forbidden}"
+
+
+def test_upstream_sync_never_merges_into_the_maintenance_branch() -> None:
+    """主任务书 §15 / §16: 每日检查、成功开 PR、冲突开 Issue, 绝不直接合并到维护分支。"""
+    workflow = _workflow("upstream-sync.yml")
+    assert 'cron: "0 2 * * *"' in workflow, "应为每日一次检查"
+    assert "git merge --no-edit upstream/main" in workflow, "应在同步分支上尝试合并"
+    assert "gh pr create" in workflow, "合并成功应开 PR"
+    assert "gh issue create" in workflow, "冲突应开 Issue"
+    assert "--force-with-lease origin" in workflow, "只应推送同步分支"
+    assert "upstream-baseline.txt" in workflow, "应记录已同步的上游基线"
+    # 不允许把上游直接推/合并到维护分支
+    assert "push origin main" not in workflow
+    assert "push origin ${SYNC_BASE_BRANCH}" not in workflow
+    assert "merge --no-edit origin" not in workflow
+
+
+def test_release_workflow_publishes_prerelease_with_checksums() -> None:
+    """主任务书 §17: 仅在 CI 通过且版本变化时, 产出 tar.gz + SHA256SUMS。"""
+    workflow = _workflow("release-linux.yml")
+    assert "workflow_run" in workflow
+    assert "conclusion == 'success'" in workflow
+    assert "sha256sum" in workflow
+    assert "SHA256SUMS" in workflow
+    assert "--prerelease" in workflow
+    assert "tar -C" in workflow
