@@ -125,6 +125,36 @@ uv run pytest tests/test_api.py::test_api_health_stats_search_and_page -q
 - `ruff format --check .` / `ruff check .` / `ty check src/` 全部通过
 ```
 
+### 准备提交给上游的第二个 PR（测试稳定性，可选）
+
+**标题**
+
+```text
+test: 修正心跳新鲜度用例的时间戳漂移
+```
+
+**正文**
+
+```markdown
+## 问题
+
+`tests/test_desktop_connection.py::test_connection_only_reports_fresh_live_worker`
+的参数表在**收集阶段**就计算 `datetime.now(UTC) + timedelta(minutes=2)`；
+而 `connection_summary()` 判定 stale 的条件是 `age < -MAX_CLOCK_SKEW(-15s)` 或
+`age > HEARTBEAT_MAX_AGE(25s)`。
+
+因此当该用例在"收集后 105 ~ 145 秒"之间执行时，`age` 落在 -15 ~ +25 秒内，
+期望 `stale` 却得到 `connected` —— 用例偶发失败。
+
+这不是平台相关缺陷，机器越慢越容易命中：在整轮耗时 223 秒的 ubuntu-22.04 上命中，
+同一提交在 ubuntu-24.04 上通过。
+
+## 改动
+
+把"未来 2 分钟"的时间戳移到用例内部生成（参数表里用哨兵值占位），
+让它与判定使用同一时刻的时钟。等待更久的"过去 2 分钟"用例不受影响。
+```
+
 ## 上游同步机制
 
 ```text
