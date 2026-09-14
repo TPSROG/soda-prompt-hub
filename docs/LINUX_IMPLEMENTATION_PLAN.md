@@ -1,0 +1,169 @@
+# Linux Implementation Plan
+
+本文件是主任务书 §30 要求的 **Implementation Plan**，与 `docs/LINUX_COMPATIBILITY_AUDIT.md`（审计）配套。
+两者合起来构成第一阶段的分析交付物。
+
+基线：`upstream/main` = `e96249b`（1.1.1）。实测环境见 `docs/LINUX_DEV_ENVIRONMENT.md`。
+
+---
+
+## 1. 范围
+
+### 第一阶段做
+
+| 项目 | 交付物 |
+| --- | --- |
+| Linux 原生运行 | 已验证：`uv sync --locked` + `uv run --no-sync prompt-hub serve` |
+| Linux 部署层 | `deploy/linux/`：安装 / 卸载 / 更新 / 启停 / 状态 + systemd **user** unit |
+| Linux 便利命令 | `soda-prompt-hub`（start/stop/restart/status/logs/serve/update） |
+| Linux 测试 | `tests/linux/`：启动、数据目录、路径、HTTP 契约 |
+| Linux CI | `.github/workflows/linux.yml`：只补上游没有的部分（Ubuntu 22.04/24.04 矩阵 + 部署冒烟） |
+| 上游同步 | `.github/workflows/upstream-sync.yml`：每日检查，更新则开同步分支 + PR，冲突则开 Issue |
+| 自动 Release | `.github/workflows/release-linux.yml`：`tar.gz` + `SHA256SUMS` |
+| 文档 | `docs/LINUX_INSTALL.md`、`docs/LINUX_UPDATE.md`、README Linux 章节、CHANGELOG Linux 条目 |
+
+### 第一阶段明确不做
+
+| 项目 | 原因 |
+| --- | --- |
+| Linux Compute Worker（ComfyUI 执行端） | Windows 实体（GUI/托盘/本机服务管理），需先抽协议，属后续独立设计 |
+| SMB 双机配对 | 上游实现硬编码 macOS（`remote_routes.py:85`、`/usr/bin/open`） |
+| LoRA 正式训练 | 上游本身也在 Windows 训练工具中完成 |
+| 桌面宿主（启动器 GUI） | 上游宿主为 C#/WinForms 与 Swift；Linux 第一版用 systemd + 浏览器 |
+| `.deb` / `.rpm` / AppImage / Snap / Flatpak | 主任务书 §18 |
+| Docker | 主任务书 §19 |
+
+---
+
+## 2. 已锁定的设计决策
+
+| # | 决策 | 依据 |
+| --- | --- | --- |
+| D1 | **不新增 `src/prompt_hub/platform/` 抽象层** | 平台差异已收敛在 3 处；上游迭代极快，中间层只会放大 rebase 成本（审计 §3） |
+| D2 | **Linux 侧改动全部为新增文件** | 唯一例外是 `.gitattributes` 追加 LF 规则；核心代码零改动（审计 §3、§7 R1） |
+| D3 | **不修改核心默认路径语义** | 资料库/模型路径一律由部署层通过环境变量注入（审计 B1） |
+| D4 | **默认资料库落在 XDG 目录** | `$XDG_DATA_HOME/soda-prompt-hub/library`，而不是 `~/Documents/...`；不改核心默认值 |
+| D5 | **systemd 用 user 级，不用 root** | 主任务书 §6/§7/§25 |
+| D6 | **默认只监听 `127.0.0.1`** | 主任务书 §25；非本机地址需显式传参并打印警告 |
+| D7 | **`loginctl enable-linger` 只作为可选参数** | 主任务书 §7；实测 WSL 下 `Linger=no` |
+| D8 | **不重复实现上游已有能力** | 审计 A6/A7（`xdg-open` 分支、`shutil.which("git")` 均已存在） |
+| D9 | **Linux CI 不复制上游 ubuntu 作业** | 上游 `ci.yml` 已在 `ubuntu-latest` 跑全量测试（审计 A1） |
+| D10 | **上游同步不直接 merge 到生产分支** | 主任务书 §16：同步分支 → CI → 成功开 PR / 失败开 Issue |
+| D11 | **G1（usage mode）走上游 PR，不在本地长期携带** | 涉及 `web.py`/`desktop_connection.py` 等核心文件（审计 G1） |
+
+---
+
+## 3. 阶段与验收
+
+### Phase 4｜Linux 部署层（本阶段）
+
+新增：
+
+```text
+deploy/linux/
+├── lib.sh                     # 共用函数（路径解析、systemd 探测、健康检查）
+├── install.sh                 # 安装：检查环境 → 建目录 → uv sync → 装 unit → 启服务 → 健康检查
+├── uninstall.sh               # 卸载：停服务、移除 unit 与便利命令；默认保留用户数据
+├── update.sh                  # 更新：git pull --ff-only → uv sync → 重启 → 健康检查 → 数据不变证明
+├── start.sh / stop.sh / status.sh
+└── soda-prompt-hub.service    # systemd user unit 模板
+```
+
+安装布局：
+
+| 内容 | 位置 |
+| --- | --- |
+| 程序（仓库本体） | 用户 clone 的位置，脚本自动解析绝对路径 |
+| Python 环境 | `<repo>/.venv`（由 `uv sync` 创建） |
+| 用户数据 | `${XDG_DATA_HOME:-~/.local/share}/soda-prompt-hub/{library,models}` |
+| 安装记录 | 同上目录下 `install.env`（供 update/uninstall/启停脚本读取） |
+| systemd unit | `${XDG_CONFIG_HOME:-~/.config}/systemd/user/soda-prompt-hub.service` |
+| 便利命令 | `~/.local/bin/soda-prompt-hub` |
+
+验收：
+
+```bash
+./deploy/linux/install.sh
+systemctl --user status soda-prompt-hub
+curl http://127.0.0.1:8765/api/health
+./deploy/linux/update.sh          # 用户数据不变
+./deploy/linux/status.sh
+./deploy/linux/uninstall.sh       # 数据默认保留
+```
+
+### Phase 5｜Linux 测试（`tests/linux/`）
+
+| 用例组 | 内容 |
+| --- | --- |
+| 部署静态检查 | 7 个脚本 `bash -n` 通过；严格模式；无 `sudo` 硬编码；无 `chmod 777`；默认 `127.0.0.1` |
+| 启动 | 冷启动 → `/api/health` 返回 ok |
+| 数据目录 | 建库、写入、重启后仍可读 |
+| 路径 | 含空格、中文、UTF-8、符号链接的资料库根目录 |
+| 便利命令 | `soda-prompt-hub status` 能读取 `install.env` 并给出正确状态 |
+
+验收：`uv run pytest tests/linux -q` 通过，且不影响上游既有测试。
+
+### Phase 6｜Linux CI
+
+`.github/workflows/linux.yml`：`ubuntu-22.04` + `ubuntu-24.04` 矩阵；`uv sync --locked` → 既有 lint/type/test →
+新增 `tests/linux` → 部署冒烟（`install.sh --no-service` 场景 + systemd 可用时跑 user service）。
+安装 Node.js（审计 §10.2：缺 Node 会导致 1 个测试硬失败）。
+
+### Phase 7｜上游同步
+
+`.github/workflows/upstream-sync.yml`：每日一次比对 `upstream/main`；
+有更新 → 建同步分支 → 尝试合并 → 跑 Linux CI → 成功开 PR、失败开 Issue；失败必须显式报告，不得静默。
+
+### Phase 8｜自动 Release
+
+`.github/workflows/release-linux.yml`：仅当上游版本变化且 Linux CI 通过时触发；
+产出 `soda-prompt-hub-linux-x86_64.tar.gz`（`application` / `deploy/` / `scripts/` / `docs/` / `README.md`）
+与 `SHA256SUMS`。
+
+### Phase 9｜文档
+
+`docs/LINUX_INSTALL.md`、`docs/LINUX_UPDATE.md`、README Linux 章节（标注 `Experimental`，写明 Core 支持 / Worker 不支持）、
+`CHANGELOG.md` 的 Linux 条目。
+
+### Phase 10｜最终验收
+
+按主任务书 §27（干净 Ubuntu 上 clone → install → systemd → 8765 → update 后数据不丢）
+与 §29（13 个问题逐条给答案）执行。
+
+---
+
+## 4. 独立轨道：G1 反哺上游
+
+`usage_mode` 目前只有 `windows_local` / `mac_remote`，Linux 会落入 `mac_remote`（审计 G1）。
+计划向上游提交一个**纯增量** PR：新增 `linux_local` 取值 + 文案与示例路径的 Linux 分支。
+在合并前，Linux 部署层**不改核心**，接受 `mac_remote` 的事实语义，并在 README / CHANGELOG 中如实说明。
+
+---
+
+## 5. 风险与缓解（承审计 §7）
+
+| 风险 | 缓解 |
+| --- | --- |
+| 上游高速迭代导致 rebase 冲突 | 改动纯新增（D2）；唯一核心改动走上游 PR（D11） |
+| WSL 与真实 Ubuntu 差异 | CI 用真实 `ubuntu-latest` 交叉验证；WSL 限制写入 `LINUX_DEV_ENVIRONMENT.md` |
+| `Linger=no` 导致 user service 在会话结束后停止 | `install.sh --enable-linger` 作为可选参数（D7），并在安装输出中明确提示 |
+| 误改用户数据 | `update.sh` 打印更新前后数据库大小/mtime 作为证据；`uninstall.sh` 默认保留数据 |
+| 上游 CI 的 Node 隐性依赖 | Linux CI 显式安装 Node（审计 §10.2） |
+
+---
+
+## 6. 提交序列（对应主任务书 §22）
+
+```text
+audit: add Linux compatibility audit                     ✅ 已完成
+chore(linux): pin shell scripts to LF line endings       ✅ 已完成
+audit: record measured Linux baseline and Node dependency ✅ 已完成
+docs(linux): add Linux implementation plan               ← 本文件
+feat(linux): add native Linux deployment scripts
+feat(linux): add systemd user service
+test(linux): add Linux compatibility tests
+ci: add Linux CI workflow
+ci: add upstream compatibility workflow
+ci: add Linux release workflow
+docs(linux): add Linux installation guide
+```
