@@ -4,6 +4,7 @@ import hashlib
 import json
 from io import BytesIO
 
+import pytest
 from fastapi.testclient import TestClient
 from PIL import Image, PngImagePlugin
 
@@ -146,6 +147,66 @@ def test_comfy_directory_is_read_only_and_plain_jpeg_is_explicit(settings, tmp_p
     assert before == after
     assert plain["metadata_present"] is False
     assert plain["metadata_source"] == "none"
+    assert plain["source_kind"] == "directory_scan"
+    assert plain["source_root"] == str(source.resolve())
+    assert plain["import_batch_id"]
+    assert plain["origins"][0]["source_path"] == "plain.jpg"
+
+
+def test_comfy_default_directory_and_recoverable_removal(settings, tmp_path) -> None:
+    source = tmp_path / "dedicated-output"
+    source.mkdir()
+    original = source / "keep-source.png"
+    original.write_bytes(_comfy_png())
+    store = ComfyResultStore(settings.comfy_results_root)
+    store.initialize()
+
+    saved = store.update_settings({"default_directory": str(source)})
+    assert saved["default_directory"] == str(source.resolve())
+    assert ComfyResultStore(settings.comfy_results_root).get_settings() == saved
+
+    report = store.import_directory(source)
+    result = report["results"][0]
+    removed = store.remove(result["result_id"])
+    assert removed["recoverable"] is True
+    assert original.is_file()
+    assert store.get(result["result_id"]) is None
+    assert (settings.comfy_results_root / "trash" / result["result_id"] / "record.json").is_file()
+
+
+def test_comfy_refuses_to_remove_associated_result(settings) -> None:
+    store = ComfyResultStore(settings.comfy_results_root)
+    store.initialize()
+    result = store.import_bytes(_comfy_png(), filename="linked.png")["result"]
+    store.update(result["result_id"], {"association": {"kind": "project", "id": "p1"}})
+    with pytest.raises(Exception, match="关联"):
+        store.remove(result["result_id"])
+
+
+def test_comfy_settings_and_remove_routes_keep_source_file(settings, tmp_path) -> None:
+    source = tmp_path / "output"
+    source.mkdir()
+    image = source / "route.png"
+    image.write_bytes(_comfy_png())
+    with TestClient(create_app(settings)) as client:
+        submitted = client.post(
+            "/api/comfy-results/import-directory",
+            json={"source_path": str(source), "remember": True},
+        )
+        assert submitted.status_code == 200
+        result = submitted.json()["results"][0]
+        saved = client.put(
+            "/api/comfy-results/settings",
+            json={"default_directory": str(source)},
+        )
+        assert saved.status_code == 200
+        assert client.get("/api/comfy-results/settings").json()["default_directory"] == str(
+            source.resolve()
+        )
+        removed = client.delete(f"/api/comfy-results/{result['result_id']}")
+        assert removed.status_code == 200
+        assert removed.json()["source_files_untouched"] is True
+        assert image.is_file()
 
 
 def test_comfy_api_attach_candidate_failure_and_branch(settings) -> None:

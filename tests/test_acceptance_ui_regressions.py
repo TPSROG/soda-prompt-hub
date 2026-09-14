@@ -133,3 +133,30 @@ const renderResultGallery=()=>{},refreshProjectJourney=async()=>{};
 })().catch(error=>{console.error(error);process.exitCode=1;});
 """
     )
+
+
+def test_krea2_translation_prefers_visual_draft_then_formal_caption() -> None:
+    script = WORKSPACE_SCRIPT[
+        WORKSPACE_SCRIPT.index("  function krea2TranslationSource(") : WORKSPACE_SCRIPT.index(
+            "  function restoreKrea2Locale("
+        )
+    ]
+    run_js(
+        script
+        + r"""
+const assert=require('node:assert/strict');
+const fields={draft:{value:'  visual draft  '},formal:{value:'  formal caption  '}};
+const $=id=>id==='#datasetDetailKrea2Draft'?fields.draft:fields.formal;
+assert.deepEqual(krea2TranslationSource(),{caption:'visual draft',label:'视觉模型草稿'});
+fields.draft.value='';
+assert.deepEqual(krea2TranslationSource(),{caption:'formal caption',label:'正式 Krea 2 说明'});
+fields.formal.value='';
+assert.deepEqual(krea2TranslationSource(),{caption:'',label:''});
+"""
+    )
+
+
+def test_remote_task_page_polls_until_cancel_reaches_final_state() -> None:
+    assert "function scheduleTaskPoll" in REMOTE_SCRIPT
+    assert "['recorded','queued','running','returned']" in REMOTE_SCRIPT
+    assert "取消时间" in REMOTE_SCRIPT

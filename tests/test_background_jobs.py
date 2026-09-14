@@ -50,6 +50,24 @@ def test_background_job_store_recovers_interrupted_and_retries(settings) -> None
     assert canceled["status"] == "canceled"
 
 
+def test_recover_interrupted_cancel_has_clear_final_message(settings) -> None:
+    store = BackgroundJobStore(settings.database_path)
+    store.initialize()
+    job = store.enqueue("scan", {"workspace_id": "cancel-on-restart"})
+    claimed = store.claim_next({"scan"})
+    assert claimed is not None
+    assert claimed["job_id"] == job["job_id"]
+    store.request_cancel(job["job_id"])
+
+    store.recover_interrupted()
+
+    recovered = store.get(job["job_id"])
+    assert recovered is not None
+    assert recovered["status"] == "canceled"
+    assert recovered["progress_message"] == "已取消"
+    assert recovered["finished_at"]
+
+
 def test_background_runner_auto_retries_and_cancels_running_job(settings) -> None:
     store = BackgroundJobStore(settings.database_path)
     calls = 0

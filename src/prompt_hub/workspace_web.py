@@ -186,8 +186,8 @@ WORKSPACE_HTML = r"""
       <textarea id="datasetDetailKrea2" maxlength="12000" aria-label="Krea 2 英文自然语言说明"></textarea>
       <div class="dataset-caption-profile"><strong>视觉模型草稿 · 待确认</strong><span id="datasetDetailKrea2VLM">尚无草稿</span></div>
       <textarea id="datasetDetailKrea2Draft" maxlength="12000" aria-label="Krea 2 视觉模型英文草稿" placeholder="先在工作台运行 Krea 2 视觉草稿队列"></textarea>
-      <div class="dataset-caption-profile"><strong>中文对照（只读）</strong><span id="datasetDetailKrea2LocaleStatus">保存或确认前可先对照</span></div>
-      <textarea id="datasetDetailKrea2Locale" readonly aria-label="Krea 2 草稿中文对照" placeholder="点“翻译成中文对照”查看这段草稿的中文意思"></textarea>
+      <div class="dataset-caption-profile"><strong>Krea 2 中文翻译（仅供审核）</strong><span id="datasetDetailKrea2LocaleStatus">优先翻译视觉草稿；没有草稿时翻译正式说明</span></div>
+      <textarea id="datasetDetailKrea2Locale" readonly aria-label="Krea 2 中文翻译" placeholder="点“翻译成中文对照”查看英文 Krea 2 内容的中文意思；不会进入交付版本"></textarea>
       <div class="dataset-action-row"><button id="datasetDetailKrea2Translate">翻译成中文对照</button></div>
       <label>修正意见<textarea id="datasetDetailKrea2Revision" maxlength="4000" placeholder="可以直接贴改写后的整段中文。也可以只写一句要求。例如：加入对肤色的描述"></textarea></label>
       <div class="dataset-action-row"><button id="datasetDetailKrea2Revise">按修正意见改写草稿</button><span id="datasetDetailKrea2ReviseStatus" class="dataset-hint">改写结果会放回英文草稿框，保存前仍可继续修改。</span></div>
@@ -543,20 +543,28 @@ WORKSPACE_SCRIPT = r"""
   function renderDetail() { const item=detailItem(); if (!item) return; const wd14=item.curation?.wd14 || {status:'untagged'}, vlm=item.curation?.krea2_vlm || {status:'empty'}, anima=item.curation?.captions?.anima || {}, krea=item.curation?.captions?.krea2 || {}, vlmTime=vlm.created_at?` · ${vlm.created_at.slice(0,16).replace('T',' ')}`:''; $('#datasetDetailImage').src=item.original_url; $('#datasetDetailName').textContent=item.relative_path; $('#datasetDetailMeta').textContent=`${item.width}×${item.height} · ${item.format} · ${(item.bytes/1024).toFixed(1)} KiB`; $('#datasetDetailStatus').value=item.review?.status || 'pending'; $('#datasetDetailCaption').value=item.caption || ''; $('#datasetDetailAnima').value=anima.current || ''; $('#datasetDetailKrea2').value=krea.current || ''; $('#datasetDetailKrea2Draft').value=vlm.draft || ''; restoreKrea2Locale(item); $('#datasetDetailKrea2Revision').value=''; $('#datasetDetailKrea2ReviseStatus').textContent='改写结果会放回英文草稿框，保存前仍可继续修改。'; $('#datasetDetailWD14').textContent=taggerDetailLabel(wd14); $('#datasetDetailKrea2VLM').textContent=vlm.status==='failed'?`失败：${vlm.error || '未知错误'}`:['completed','confirmed'].includes(vlm.status)?`${vlm.model || '人工保存草稿'}${vlmTime}${vlm.status==='confirmed'?' · 已确认':''}`:'尚无草稿'; $('#datasetDetailKrea2Warning').hidden=!vlm.safety_warning; $('#datasetDetailKrea2Warning').textContent=vlm.safety_warning || ''; $('#datasetDetailDraftConfirm').disabled=!vlm.draft; $('#datasetDetailHashes').textContent=`SHA-256：${item.sha256}\npHash：${item.phash || '—'}\n原始说明：${item.caption_path || '缺失'}\n来源文件：${item.relative_path}\nAnima 状态：${anima.status || 'empty'}\nKrea 2 状态：${krea.status || 'empty'}\n视觉草稿哈希：${vlm.source_sha256 || '—'}`; $('#datasetPrevious').disabled=state.detailIndex<=0; $('#datasetNext').disabled=state.detailIndex>=state.pageItems.length-1; $('#datasetFindSimilar').disabled=true; $('#datasetFindSimilarStatus').textContent='正在检查真实视觉索引……'; refreshSimilarStatus(item).catch(error=>$('#datasetFindSimilarStatus').textContent=error.message); renderDetailTags(item).catch(console.error); }
   async function refreshSimilarStatus(item) { const digest=item.sha256, result=await api(`/api/hybrid-search/source-status?source_sha256=${encodeURIComponent(digest)}`); if(detailItem()?.sha256!==digest) return; $('#datasetFindSimilar').disabled=!result.available; $('#datasetFindSimilarStatus').textContent=result.available?`已进入 ${result.indexes.length} 个真实索引，可以查相似图。`:'尚未进入真实视觉索引；请到智能检索建立本机索引。'; }
   function openDetail(index) { state.detailIndex=index; renderDetail(); $('#datasetDetail').showModal(); }
+  function krea2TranslationSource() {
+    const draft=$('#datasetDetailKrea2Draft').value.trim();
+    if(draft) return {caption:draft,label:'视觉模型草稿'};
+    const formal=$('#datasetDetailKrea2').value.trim();
+    return formal?{caption:formal,label:'正式 Krea 2 说明'}:{caption:'',label:''};
+  }
   function restoreKrea2Locale(item) {
     // 译文按图记住。翻过的那张切回来还在。不必重翻。
     // 但也不能就这样留着上一张的。挂在另一张草稿旁边会被当成这张的意思。
     const cached=state.captionLocales[item.relative_path];
-    const draft=String(item.curation?.krea2_vlm?.draft || '');
+    const draft=String(item.curation?.krea2_vlm?.draft || '').trim();
+    const formal=String(item.curation?.captions?.krea2?.current || '').trim();
+    const source=draft || formal;
     // 批次翻译的结果存在工作区里。逐张审核时不必再翻一次。
     const stored=item.curation?.krea2_locale || {};
-    const storedUsable=String(stored.localized || '') && String(stored.source || '')===draft ? String(stored.localized) : '';
+    const storedUsable=String(stored.localized || '') && String(stored.source || '')===source ? String(stored.localized) : '';
     // 草稿变了 重新生成或改写过 之后。旧译文对应的已经不是眼前这段。
-    const usable=cached && cached.caption===draft ? cached.localized : storedUsable;
+    const usable=cached && cached.caption===source ? cached.localized : storedUsable;
     $('#datasetDetailKrea2Locale').value=usable;
     $('#datasetDetailKrea2LocaleStatus').textContent=usable
-      ? '仅供对照。导出的始终是英文草稿'
-      : (cached?'草稿已变动。需要对照请重新翻译':'按需翻译。逐张确认时才发送请求');
+      ? '仅供审核对照；交付仍使用英文 Krea 2 内容'
+      : (cached?'英文来源已变动，需要对照请重新翻译':'按需翻译；不会写入 Anima 或交付文件');
   }
 
   function moveDetail(offset) { const next=state.detailIndex+offset; if (next<0 || next>=state.pageItems.length) return; state.detailIndex=next; renderDetail(); }
@@ -790,16 +798,16 @@ WORKSPACE_SCRIPT = r"""
   // 不记的话每切一次就把人调好的设定清空。
   $('#datasetCaptionOptionList').addEventListener('change',event=>{ const input=event.target.closest('[data-caption-option]'); if(input) state.captionOptions[input.dataset.captionOption]=input.checked; });
   $('#datasetDetailKrea2Translate').addEventListener('click',async()=>{
-    const caption=$('#datasetDetailKrea2Draft').value.trim();
+    const source=krea2TranslationSource(), caption=source.caption;
     const status=$('#datasetDetailKrea2LocaleStatus');
-    if(!caption){ status.textContent='草稿是空的，没有可对照的内容'; $('#datasetDetailKrea2Locale').value=''; return; }
-    status.textContent='正在翻译……';
+    if(!caption){ status.textContent='视觉草稿和正式 Krea 2 说明都是空的'; $('#datasetDetailKrea2Locale').value=''; return; }
+    status.textContent=`正在翻译${source.label}……`;
     try {
       const result=await api('/api/captions/localize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({caption})});
       $('#datasetDetailKrea2Locale').value=result.localized || '';
       const current=detailItem();
       if (current && result.localized) state.captionLocales[current.relative_path]={caption,localized:result.localized};
-      status.textContent=result.localized?'仅供对照。导出的始终是英文草稿':'翻译服务没有返回结果。草稿本身不受影响';
+      status.textContent=result.localized?`已翻译${source.label}；仅供审核，交付仍使用英文`:'翻译服务没有返回结果；英文内容不受影响';
     } catch(error) { $('#datasetDetailKrea2Locale').value=''; status.textContent=`翻译失败：${error.message}`; }
   });
   $('#datasetDetailKrea2Revise').addEventListener('click',async()=>{

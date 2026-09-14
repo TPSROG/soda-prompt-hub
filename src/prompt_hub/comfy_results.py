@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from io import BytesIO
@@ -36,13 +37,38 @@ class ComfyResultStore:
     def __init__(self, root: Path) -> None:
         self.root = root
         self.index_path = root / "index.json"
+        self.settings_path = root / "settings.json"
         self._lock = Lock()
 
     def initialize(self) -> None:
         (self.root / "original").mkdir(parents=True, exist_ok=True)
         (self.root / "thumbnail").mkdir(parents=True, exist_ok=True)
+        (self.root / "trash").mkdir(parents=True, exist_ok=True)
         if not self.index_path.is_file():
             self._write_index({"format": "soda-comfy-results-v1", "items": []})
+
+    def get_settings(self) -> dict[str, str]:
+        if not self.settings_path.is_file():
+            return {"default_directory": ""}
+        try:
+            value = json.loads(self.settings_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise ComfyResultError("Windows 出图目录设置无法读取") from error
+        directory = value.get("default_directory", "") if isinstance(value, dict) else ""
+        return {"default_directory": str(directory)}
+
+    def update_settings(self, values: Mapping[str, Any]) -> dict[str, str]:
+        directory = str(values.get("default_directory", "")).strip()
+        if directory:
+            directory = str(_validate_directory(directory, self.root))
+        saved = {"default_directory": directory}
+        temporary = self.settings_path.with_name(f".{self.settings_path.name}.{uuid4().hex}.tmp")
+        temporary.write_text(
+            json.dumps(saved, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        temporary.replace(self.settings_path)
+        return saved
 
     def list_results(self, *, limit: int = 100) -> list[dict[str, Any]]:
         items = self._read_index()["items"]
@@ -60,12 +86,17 @@ class ComfyResultStore:
         raw: bytes,
         *,
         filename: str,
-        source_path: str = "",
+        origin: Mapping[str, str] | None = None,
     ) -> dict[str, Any]:
         with self._lock:
             index = self._read_index()
-            outcome = self._import_into_index(raw, filename, source_path, index)
-            if not outcome["duplicate"]:
+            outcome = self._import_into_index(
+                raw,
+                filename,
+                index,
+                origin=origin,
+            )
+            if not outcome["duplicate"] or outcome.get("origin_added"):
                 self._write_index(index)
             return outcome
 
@@ -73,13 +104,25 @@ class ComfyResultStore:
         self,
         raw: bytes,
         filename: str,
-        source_path: str,
         index: dict[str, Any],
+        *,
+        origin: Mapping[str, str] | None,
     ) -> dict[str, Any]:
         digest = hashlib.sha256(raw).hexdigest()
+        provenance = _origin_record(origin or {"source_kind": "manual_upload"})
         existing = next((item for item in index["items"] if item["sha256"] == digest), None)
         if existing is not None:
-            return {"result": self._decorate(dict(existing)), "duplicate": True}
+            origins = existing.setdefault("origins", _legacy_origins(existing))
+            key = _origin_key(provenance)
+            origin_added = bool(key and not any(_origin_key(known) == key for known in origins))
+            if origin_added:
+                origins.append(provenance)
+                existing["updated_at"] = _now()
+            return {
+                "result": self._decorate(dict(existing)),
+                "duplicate": True,
+                "origin_added": origin_added,
+            }
         inspected = inspect_comfy_image(raw, filename=filename)
         result_id = f"comfy-{uuid4().hex}"
         suffix = inspected.pop("suffix")
@@ -91,7 +134,11 @@ class ComfyResultStore:
             **inspected,
             "result_id": result_id,
             "filename": Path(filename).name[:180] or original_name,
-            "source_path": source_path,
+            "source_path": provenance["source_path"],
+            "source_kind": provenance["source_kind"],
+            "source_root": provenance["source_root"],
+            "import_batch_id": provenance["import_batch_id"],
+            "origins": [provenance],
             "original_name": original_name,
             "thumbnail_name": thumbnail_name,
             "disposition": "unreviewed",
@@ -105,7 +152,11 @@ class ComfyResultStore:
 
     def scan_job(self, payload: Mapping[str, Any], context: JobContext) -> dict[str, Any]:
         context.update(0, 0, "正在检查目录；取消会保留已经导入的图片")
-        report = self.import_directory(str(payload["source_path"]), context=context)
+        report = self.import_directory(
+            str(payload["source_path"]),
+            context=context,
+            import_batch_id=str(payload.get("import_batch_id", "")),
+        )
         report.pop("results", None)
         return report
 
@@ -114,8 +165,10 @@ class ComfyResultStore:
         source_path: Path | str,
         *,
         context: JobContext | None = None,
+        import_batch_id: str = "",
     ) -> dict[str, Any]:
         source = _validate_directory(source_path, self.root)
+        batch_id = import_batch_id or f"scan-{uuid4().hex}"
         paths = _collect_images(source, context=context)
         imported = 0
         duplicates = 0
@@ -143,8 +196,13 @@ class ComfyResultStore:
                             outcome = self._import_into_index(
                                 path.read_bytes(),
                                 path.name,
-                                relative,
                                 index,
+                                origin={
+                                    "source_kind": "directory_scan",
+                                    "source_root": str(source),
+                                    "source_path": relative,
+                                    "import_batch_id": batch_id,
+                                },
                             )
                         except (ComfyResultError, OSError) as error:
                             failed.append({"path": relative, "error": str(error)})
@@ -162,6 +220,7 @@ class ComfyResultStore:
         return {
             "source_path": str(source),
             "source_mode": "read-only",
+            "import_batch_id": batch_id,
             "scanned": len(paths),
             "imported": imported,
             "duplicates": duplicates,
@@ -203,6 +262,55 @@ class ComfyResultStore:
             self._write_index(index)
         return self._decorate(dict(item))
 
+    def remove(self, result_id: str) -> dict[str, Any]:
+        """Move a managed copy to the internal trash without touching its source."""
+        with self._lock:
+            index = self._read_index()
+            item = next(
+                (value for value in index["items"] if value["result_id"] == result_id),
+                None,
+            )
+            if item is None:
+                raise ComfyResultError("ComfyUI result not found")
+            if item.get("associations"):
+                raise ComfyResultError("图片仍有关联项目，请先保留这条记录")
+            trash = self.root / "trash" / result_id
+            if trash.exists():
+                raise ComfyResultError("这条记录的回收区目录已存在，请先检查")
+            trash.mkdir(parents=True)
+            moved: list[tuple[Path, Path]] = []
+            try:
+                (trash / "record.json").write_text(
+                    json.dumps(item, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                variants = (("original", "original_name"), ("thumbnail", "thumbnail_name"))
+                for variant, key in variants:
+                    name = str(item.get(key, ""))
+                    source = self.root / variant / name
+                    if name and Path(name).name == name and source.is_file():
+                        target = trash / variant / name
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        source.replace(target)
+                        moved.append((target, source))
+                index["items"] = [
+                    value for value in index["items"] if value["result_id"] != result_id
+                ]
+                self._write_index(index)
+            except Exception:
+                for source, target in reversed(moved):
+                    if source.exists():
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        source.replace(target)
+                shutil.rmtree(trash, ignore_errors=True)
+                raise
+        return {
+            "result_id": result_id,
+            "recoverable": True,
+            "source_files_untouched": True,
+            "trash_path": str(trash),
+        }
+
     def resolve_media(self, result_id: str, variant: str) -> Path | None:
         item = self.get(result_id)
         if item is None or variant not in {"original", "thumbnail"}:
@@ -223,6 +331,15 @@ class ComfyResultStore:
 
     def _decorate(self, item: dict[str, Any]) -> dict[str, Any]:
         result_id = item["result_id"]
+        origins = item.get("origins")
+        if not isinstance(origins, list) or not origins:
+            origins = _legacy_origins(item)
+        item["origins"] = origins
+        latest = origins[-1] if origins else {}
+        item["source_kind"] = str(latest.get("source_kind", "legacy_import"))
+        item["source_root"] = str(latest.get("source_root", ""))
+        item["source_path"] = str(latest.get("source_path", item.get("source_path", "")))
+        item["import_batch_id"] = str(latest.get("import_batch_id", ""))
         item["original_url"] = f"/comfy-results/{result_id}/original"
         item["thumbnail_url"] = f"/comfy-results/{result_id}/thumbnail"
         return item
@@ -242,6 +359,41 @@ class ComfyResultStore:
             encoding="utf-8",
         )
         temporary.replace(self.index_path)
+
+
+def _origin_record(values: Mapping[str, str]) -> dict[str, str]:
+    allowed = {"manual_upload", "directory_scan", "worker_return", "legacy_import"}
+    source_kind = str(values.get("source_kind", ""))
+    kind = source_kind if source_kind in allowed else "legacy_import"
+    return {
+        "source_kind": kind,
+        "source_root": str(values.get("source_root", ""))[:2000],
+        "source_path": str(values.get("source_path", ""))[:2000],
+        "import_batch_id": str(values.get("import_batch_id", ""))[:180],
+        "imported_at": _now(),
+    }
+
+
+def _legacy_origins(item: Mapping[str, Any]) -> list[dict[str, str]]:
+    source_path = str(item.get("source_path", ""))
+    return [
+        {
+            "source_kind": "legacy_import",
+            "source_root": "",
+            "source_path": source_path,
+            "import_batch_id": "",
+            "imported_at": str(item.get("created_at", "")),
+        }
+    ]
+
+
+def _origin_key(origin: Mapping[str, Any]) -> tuple[str, str, str, str]:
+    return (
+        str(origin.get("source_kind", "")),
+        str(origin.get("source_root", "")),
+        str(origin.get("source_path", "")),
+        str(origin.get("import_batch_id", "")),
+    )
 
 
 def inspect_comfy_image(raw: bytes, *, filename: str) -> dict[str, Any]:

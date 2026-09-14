@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal, Never
 from urllib.parse import quote
@@ -633,7 +634,7 @@ def create_workspace_router(
             _raise_workspace_http(error)
         if path is None:
             raise HTTPException(status_code=404, detail="Dataset export version not found")
-        _reveal_in_finder(path)
+        _reveal_in_file_manager(path)
         return {"workspace_id": workspace_id, "version_id": version_id, "revealed": True}
 
     @router.get(
@@ -739,14 +740,30 @@ def create_workspace_router(
     return router
 
 
-def _reveal_in_finder(path: Path) -> None:
-    result = subprocess.run(  # noqa: S603 - executable and arguments are fixed by the app.
-        ["/usr/bin/open", "-R", str(path)],
-        check=False,
-        capture_output=True,
-    )
+def _reveal_in_file_manager(path: Path) -> None:
+    if sys.platform == "darwin":
+        command = ["/usr/bin/open", "-R", str(path)]
+        manager = "Finder"
+    elif sys.platform == "win32":
+        command = ["explorer.exe", "/select,", str(path)]
+        manager = "文件资源管理器"
+    elif sys.platform.startswith("linux"):
+        command = ["xdg-open", str(path if path.is_dir() else path.parent)]
+        manager = "文件管理器"
+    else:
+        raise HTTPException(status_code=501, detail="当前系统不支持打开所在文件夹")
+    try:
+        result = subprocess.run(  # noqa: S603 - executable and arguments are fixed by the app.
+            command,
+            check=False,
+            capture_output=True,
+            timeout=10,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise HTTPException(status_code=503, detail=f"无法打开{manager}，请稍后重试") from error
     if result.returncode:
-        raise HTTPException(status_code=503, detail="无法打开 Finder, 请稍后重试")
+        raise HTTPException(status_code=503, detail=f"无法打开{manager}，请稍后重试")
 
 
 def _required_delivery_root(remote_store: RemoteNodeStore, node_id: str) -> Path:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Annotated, Any, Literal, NoReturn
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse
@@ -18,6 +19,11 @@ if TYPE_CHECKING:
 
 class ComfyDirectoryInput(BaseModel):
     source_path: str = Field(min_length=1, max_length=2000)
+    remember: bool = True
+
+
+class ComfySettingsInput(BaseModel):
+    default_directory: str = Field(default="", max_length=2000)
 
 
 class ComfyResultUpdate(BaseModel):
@@ -41,7 +47,25 @@ def create_comfy_router(
 
     @router.post("/api/comfy-results/scan-jobs", status_code=status.HTTP_202_ACCEPTED)
     def start_scan_job(payload: ComfyDirectoryInput) -> dict[str, Any]:
-        return job_runner.submit("comfy_scan", payload.model_dump(), exclusive=True)
+        try:
+            if payload.remember:
+                store.update_settings({"default_directory": payload.source_path})
+        except ComfyResultError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        values = payload.model_dump()
+        values["import_batch_id"] = f"scan-{uuid4().hex}"
+        return job_runner.submit("comfy_scan", values, exclusive=True)
+
+    @router.get("/api/comfy-results/settings")
+    def get_comfy_settings() -> dict[str, str]:
+        return store.get_settings()
+
+    @router.put("/api/comfy-results/settings")
+    def update_comfy_settings(payload: ComfySettingsInput) -> dict[str, str]:
+        try:
+            return store.update_settings(payload.model_dump())
+        except ComfyResultError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
 
     @router.get("/api/comfy-results")
     def list_comfy_results(
@@ -77,6 +101,13 @@ def create_comfy_router(
     ) -> dict[str, Any]:
         try:
             return store.update(result_id, payload.model_dump(exclude_unset=True))
+        except ComfyResultError as error:
+            _raise_comfy_http(error)
+
+    @router.delete("/api/comfy-results/{result_id}")
+    def remove_comfy_result(result_id: str) -> dict[str, Any]:
+        try:
+            return store.remove(result_id)
         except ComfyResultError as error:
             _raise_comfy_http(error)
 

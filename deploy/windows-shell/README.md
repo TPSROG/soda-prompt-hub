@@ -24,7 +24,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 ```
 
 构建脚本生成 self-contained 的 `win-x64` 目录和 ZIP，不要求目标电脑另装 .NET Runtime。版本从
-`deploy/windows-worker/RELEASE.json` 读取，当前保持 `1.1.0`。发布目录中的 `校验桌面包.ps1` 会按
+`deploy/windows-worker/RELEASE.json` 读取，当前源码候选为 `1.1.1`。发布目录中的 `校验桌面包.ps1` 会按
 `PACKAGE_MANIFEST.sha256` 校验 `.exe`、Desktop UI 和内置 Worker；真实配置不在清单或 ZIP 中。
 
 ## 安装到现有 Worker
@@ -33,7 +33,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 ```powershell
 .\deploy\windows-shell\install-to-worker.ps1 `
-  -PublishedRoot ".\deploy\windows-shell\dist\Soda-Compute-Worker-1.1.0-win-x64" `
+  -PublishedRoot ".\deploy\windows-shell\dist\Soda-Compute-Worker-<版本>-win-x64" `
   -WorkerRoot "D:\你的现有Worker目录"
 ```
 

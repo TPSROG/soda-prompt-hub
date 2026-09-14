@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import subprocess
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fastapi.testclient import TestClient
 
 from prompt_hub import maintenance
+from prompt_hub.api import create_app
 from prompt_hub.creative import CreativeStore
 from prompt_hub.database import PromptDatabase
 from prompt_hub.embedding_index import EmbeddingIndexStore
@@ -47,6 +51,41 @@ def test_backup_survives_unavailable_git_metadata(settings, tmp_path, monkeypatc
     assert result["manifest"]["git_sources"][0]["revision"] == "unavailable"
     assert result["manifest"]["git_sources"][0]["warning"]
     assert verify_backup(tmp_path / "backup")["ok"]
+
+
+def test_database_snapshots_close_connections_before_windows_file_operations(
+    settings,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """SQLite context managers do not close handles, which breaks rename on Windows."""
+    _seed_backup_roots(settings)
+    real_connect = sqlite3.connect
+    wrappers = []
+
+    class TrackingConnection(sqlite3.Connection):
+        closed = False
+
+        def close(self):
+            self.closed = True
+            super().close()
+
+    def tracking_connect(*args, **kwargs):
+        connection = real_connect(*args, factory=TrackingConnection, **kwargs)
+        wrappers.append(connection)
+        return connection
+
+    monkeypatch.setattr(maintenance.sqlite3, "connect", tracking_connect)
+    payload = tmp_path / "payload"
+    try:
+        reports = BackupManager(settings)._snapshot_databases(payload)  # noqa: SLF001
+        assert len(reports) == 2
+        assert wrappers
+        assert all(wrapper.closed for wrapper in wrappers)
+    finally:
+        for wrapper in wrappers:
+            if not wrapper.closed:
+                wrapper.close()
 
 
 def _seed_backup_roots(settings) -> dict[str, str]:
@@ -181,3 +220,34 @@ def test_doctor_checks_selected_tagger_model(settings, monkeypatch) -> None:
     wd14_check = next(item for item in report["checks"] if item["name"] == "wd14_model")
     assert wd14_check["ok"] is True
     assert wd14_check["detail"] == f"{settings.wd14_model_name}: {model_root}"
+
+
+def test_backup_api_runs_verified_background_job_and_is_visible_in_webui(
+    settings,
+    tmp_path,
+) -> None:
+    _seed_backup_roots(settings)
+    destination = tmp_path / "api-backup"
+    with TestClient(create_app(settings)) as client:
+        status = client.get("/api/maintenance/backup-status").json()
+        assert status["estimated_bytes"] > 0
+        assert status["default_parent"]
+        created = client.post(
+            "/api/maintenance/backups",
+            json={"destination": str(destination)},
+        )
+        assert created.status_code == 202
+        job_id = created.json()["job_id"]
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            job = client.get(f"/api/jobs/{job_id}").json()
+            if job["status"] in {"completed", "failed", "canceled"}:
+                break
+            time.sleep(0.02)
+        assert job["status"] == "completed", job
+        assert job["result"]["ok"] is True
+        assert job["result"]["backup_path"] == str(destination)
+        assert verify_backup(destination)["ok"] is True
+        page = client.get("/").text
+        assert "完整备份与自动校验" in page
+        assert "/api/maintenance/backups" in page

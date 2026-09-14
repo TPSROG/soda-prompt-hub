@@ -59,7 +59,8 @@ def test_scan_job_is_async_exclusive_and_cancelable(settings, tmp_path) -> None:
     source.mkdir()
     entered, release = Event(), Event()
 
-    def scan(_self, _path, *, context=None):
+    def scan(_self, _path, *, context=None, import_batch_id=""):
+        assert import_batch_id.startswith("scan-")
         context.update(0, 2, "扫描测试")
         entered.set()
         assert release.wait(5)

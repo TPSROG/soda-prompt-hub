@@ -608,5 +608,7 @@ def test_each_image_keeps_its_own_translation() -> None:
     handler_at = INDEX_HTML.index("function restoreKrea2Locale(item)")
     handler = INDEX_HTML[handler_at : handler_at + 900]
     assert "state.captionLocales[item.relative_path]" in handler
-    # 草稿变了之后旧译文对应的已经不是眼前这段
-    assert "cached.caption===draft" in handler
+    # 优先跟随视觉草稿; 没有草稿时也可对照正式 Krea 2 说明.
+    # 任一英文来源变化后, 旧译文都不能继续显示.
+    assert "const source=draft || formal" in handler
+    assert "cached.caption===source" in handler

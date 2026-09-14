@@ -33,5 +33,5 @@ Set-ExecutionPolicy -Scope Process Bypass
 `deploy/windows-installer/build.ps1` 把它转换为包含固定 Python runtime、依赖和 WebView2 bootstrapper 的
 per-user Setup；最终用户不需要 `.NET Runtime`、Python、`uv` 或 SDK。
 
-版本从根 `RELEASE.json` / `pyproject.toml` 读取，当前保持 `1.1.0`。发布包含 Core、Worker、共享 UI
+版本从根 `RELEASE.json` / `pyproject.toml` 读取，当前源码候选为 `1.1.1`。发布包含 Core、Worker、共享 UI
 和三层 SHA-256 manifest，但不包含用户数据库、模型、真实 `worker-config.json` 或凭据。

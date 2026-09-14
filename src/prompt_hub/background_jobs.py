@@ -159,7 +159,8 @@ class BackgroundJobStore:
             connection.execute(
                 """
                 UPDATE background_jobs SET
-                    status = 'canceled', finished_at = ?, updated_at = ?
+                    status = 'canceled', progress_message = '已取消',
+                    finished_at = ?, updated_at = ?
                 WHERE status = 'running' AND cancel_requested = 1
                 """,
                 (now, now),

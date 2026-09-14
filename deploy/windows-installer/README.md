@@ -18,8 +18,8 @@ WebView2 bootstrapper 签名。
 
 ```powershell
 .\deploy\windows-installer\build.ps1 `
-  -DesktopPackageRoot C:\release\Soda-Prompt-Hub-Desktop-1.1.0-win-x64 `
-  -WorkerPackageRoot C:\release\Soda-Compute-Worker-1.1.0-win-x64 `
+  -DesktopPackageRoot C:\release\Soda-Prompt-Hub-Desktop-<版本>-win-x64 `
+  -WorkerPackageRoot C:\release\Soda-Compute-Worker-<版本>-win-x64 `
   -OutputRoot C:\release\commercial
 ```
 

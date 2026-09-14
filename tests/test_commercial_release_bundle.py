@@ -10,6 +10,8 @@ from scripts.build_commercial_release_bundle import (
     assemble_release,
 )
 
+from prompt_hub import __version__
+
 
 def _repository() -> Path:
     return Path(__file__).resolve().parents[1]
@@ -34,19 +36,19 @@ def _artifact(root: Path, name: str, content: bytes) -> dict[str, object]:
 def test_assemble_release_verifies_and_indexes_all_products(tmp_path: Path) -> None:
     windows = tmp_path / "windows"
     mac = tmp_path / "mac"
-    desktop = _artifact(windows, "Soda-Prompt-Hub-Desktop-1.1.0-Setup.exe", b"desktop")
-    worker = _artifact(windows, "Soda-Compute-Worker-1.1.0-Setup.exe", b"worker")
-    dmg = _artifact(mac, "Soda-Prompt-Hub-1.1.0-macOS-arm64.dmg", b"mac")
+    desktop = _artifact(windows, f"Soda-Prompt-Hub-Desktop-{__version__}-Setup.exe", b"desktop")
+    worker = _artifact(windows, f"Soda-Compute-Worker-{__version__}-Setup.exe", b"worker")
+    dmg = _artifact(mac, f"Soda-Prompt-Hub-{__version__}-macOS-arm64.dmg", b"mac")
     _write_manifest(
         windows,
         "COMMERCIAL_RELEASE.json",
-        {"version": "1.1.0", "signed": False, "installers": [desktop, worker]},
+        {"version": __version__, "signed": False, "installers": [desktop, worker]},
     )
     _write_manifest(
         mac,
         "COMMERCIAL_RELEASE.json",
         {
-            "version": "1.1.0",
+            "version": __version__,
             "architecture": "arm64",
             "signed": False,
             "notarized": False,
@@ -57,7 +59,7 @@ def test_assemble_release_verifies_and_indexes_all_products(tmp_path: Path) -> N
     output = tmp_path / "release"
     index = assemble_release(_repository(), windows, mac, output)
 
-    assert index["version"] == "1.1.0"
+    assert index["version"] == __version__
     assert len(index["artifacts"]) == 3
     assert (output / "Windows" / desktop["file"]).read_bytes() == b"desktop"
     assert (output / "Windows" / worker["file"]).read_bytes() == b"worker"
@@ -75,19 +77,19 @@ def test_assemble_release_verifies_and_indexes_all_products(tmp_path: Path) -> N
 def test_assemble_release_rejects_tampered_or_existing_output(tmp_path: Path) -> None:
     windows = tmp_path / "windows"
     mac = tmp_path / "mac"
-    desktop = _artifact(windows, "Soda-Prompt-Hub-Desktop-1.1.0-Setup.exe", b"desktop")
-    worker = _artifact(windows, "Soda-Compute-Worker-1.1.0-Setup.exe", b"worker")
-    dmg = _artifact(mac, "Soda-Prompt-Hub-1.1.0-macOS-arm64.dmg", b"mac")
+    desktop = _artifact(windows, f"Soda-Prompt-Hub-Desktop-{__version__}-Setup.exe", b"desktop")
+    worker = _artifact(windows, f"Soda-Compute-Worker-{__version__}-Setup.exe", b"worker")
+    dmg = _artifact(mac, f"Soda-Prompt-Hub-{__version__}-macOS-arm64.dmg", b"mac")
     desktop["sha256"] = "0" * 64
     _write_manifest(
         windows,
         "COMMERCIAL_RELEASE.json",
-        {"version": "1.1.0", "signed": False, "installers": [desktop, worker]},
+        {"version": __version__, "signed": False, "installers": [desktop, worker]},
     )
     _write_manifest(
         mac,
         "COMMERCIAL_RELEASE.json",
-        {"version": "1.1.0", "architecture": "arm64", **dmg},
+        {"version": __version__, "architecture": "arm64", **dmg},
     )
 
     with pytest.raises(CommercialBundleError, match="SHA-256 mismatch"):

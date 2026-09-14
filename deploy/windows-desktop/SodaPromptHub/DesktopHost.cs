@@ -736,11 +736,11 @@ internal sealed class DesktopHost : IDisposable
         try
         {
             using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(CoreRoot, "RELEASE.json")));
-            return document.RootElement.GetProperty("product_version").GetString() ?? "1.1.0";
+            return document.RootElement.GetProperty("product_version").GetString() ?? "1.1.1";
         }
         catch (Exception error) when (error is IOException or JsonException or KeyNotFoundException)
         {
-            return "1.1.0";
+            return "1.1.1";
         }
     }
 
