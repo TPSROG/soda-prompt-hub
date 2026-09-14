@@ -226,6 +226,62 @@ Soda Prompt Hub Linux 适配审计报告（第一阶段交付物）。
 
 ---
 
+## 10. Linux 实测结果（WSL2 首轮，2026-09-14）
+
+环境：WSL2 + Ubuntu 24.04.5 LTS，x86_64，Python 3.12.3，uv 0.12.13。
+详细环境记录见 `docs/LINUX_DEV_ENVIRONMENT.md`。
+
+### 10.1 上游基线：测试与构建
+
+| 项目 | 结果 |
+| --- | --- |
+| `uv sync --locked` | 成功，约 10.6 秒（约 50 个包），`uv.lock` 无改动 |
+| `pytest` | **543 passed, 9 skipped, 0 failed**，覆盖率 **83.41%**（门槛 80%），约 126 秒 |
+| 跳过项 | 9 个，全部为 macOS 专属 |
+| 结论 | 上游核心在 Linux 上**开箱可用**，无需任何核心代码修改 |
+
+### 10.2 新发现：测试套件隐性依赖 Node.js（E 类，建议反哺上游）
+
+| 项目 | 内容 |
+| --- | --- |
+| 位置 | `tests/test_pairing_guide.py:26` |
+| 问题 | 该测试直接 `assert shutil.which("node")`，**缺少 Node 时是失败而不是跳过**；另有 12 个 Node 相关测试用 `skipif` 跳过 |
+| 原因 | GitHub `ubuntu-latest` runner 预装 Node，上游 CI 因此看不到这个问题 |
+| 影响 | 任何没有 Node 的 Linux 环境（含最小化服务器、CI 镜像、自托管 runner）会看到 1 个红色失败 + 12 个跳过；13 个 UI 行为测试失去覆盖 |
+| 解决方案 | 第一阶段：本地与 Linux CI 显式安装 Node.js（已验证：安装后 543 通过 / 9 跳过）；长期：建议向上游提 PR，把该断言改为 `pytest.mark.skipif` 或 `pytest.importorskip("node")` |
+| 是否影响 upstream merge | 不影响（仅建议上游修改；本地 CI 自行安装 Node 即可） |
+
+### 10.3 服务与路径实测
+
+| 场景 | 结果 |
+| --- | --- |
+| 默认配置（不设环境变量） | `GET /` = 200；`/api/health` = `status: ok`；`/api/stats` 正常；监听 `127.0.0.1:8765`（未暴露 `0.0.0.0`） |
+| 中文 + 空格 + UTF-8 路径（`~/资料库 测试/Soda Prompt Hub`） | `prompt-hub init` 成功建库；服务启动正常；`/api/health` 返回该路径；SQLite 文件正常生成 |
+| 资料库根目录为符号链接（`~/linked-library` → `~/real-library-target`） | 服务启动正常，`/api/health` 正常 |
+| 默认目录行为 | 确认会在 Linux 上创建 `~/Documents/Soda Prompt Hub/prompt-library`，印证 B1（非 XDG） |
+
+### 10.4 systemd（WSL2）
+
+| 项目 | 结果 |
+| --- | --- |
+| PID 1 | systemd 255 |
+| `systemctl is-system-running` | `running` |
+| `systemctl --user` | 可用（`XDG_RUNTIME_DIR=/run/user/1000`） |
+| `journalctl --user` | 可用 |
+| `loginctl show-user voldm -p Linger` | **`Linger=no`** |
+| 影响 | 后续 `deploy/linux` 的 systemd **user** service 在会话结束后会停止；若要常驻需 `loginctl enable-linger`（按主任务书 §7，只作为可选步骤，不默认开启） |
+
+### 10.5 WSL2 环境侧注意（不属于项目代码问题）
+
+| 项目 | 说明 |
+| --- | --- |
+| 代理 | `wsl.exe` 提示 Windows 侧 localhost 代理未镜像到 WSL（NAT 模式限制）；实测 WSL 内直连可用 |
+| 下载源 | `releases.astral.sh` 约 3 KB/s 不可用（uv 改用 pipx + PyPI 镜像安装）；Ubuntu 源与 PyPI 均正常 |
+| Node.js | 见 10.2，必须安装 |
+| `xdg-open` | 未安装，无桌面会话；“打开所在文件夹”会走失败分支（可用于验证可读错误，但无法验证图形打开） |
+
+---
+
 ## 附录 A：复现本次审计的命令
 
 ```bash
@@ -254,12 +310,25 @@ git grep -h -E "^\s*def test_" upstream/main -- tests | wc -l
 git grep -nE "pytest\.mark\.skipif" upstream/main -- tests
 ```
 
-## 附录 B：本次审计**未能**覆盖、需要在真实 Ubuntu 上验证的项
+## 附录 B：验证状态清单
 
-1. `uv sync --locked` 在 Linux 上解析出的 wheel 集合（`onnxruntime`、`numpy`、`pillow`）与上游 CI 完全一致。
-2. `pytest` 在 Linux 上的跳过/失败明细（预期仅 4 个 macOS 文件跳过）。
-3. `prompt-hub serve` 冷启动与 `GET /`、`/api/health`、`/api/stats` 的实际响应。
-4. 中文 / 空格 / UTF-8 路径下的资料库读写与缩略图生成。
-5. `xdg-open` 在无桌面会话（纯 WSL2、无 GUI）时的失败路径是否返回可读错误而不是崩溃。
-6. `systemctl --user` 下 unit 的启动、重启、日志进入 journald、`loginctl enable-linger` 行为。
-7. `install.sh` / `update.sh` 的幂等性与“更新不动用户数据”的实证。
+### 已在 WSL2 Ubuntu 24.04 实测（2026-09-14）
+
+| # | 项目 | 状态 |
+| --- | --- | --- |
+| 1 | `uv sync --locked` 依赖安装与 `uv.lock` 无改动 | ✅ 已验证，见 §10.1 |
+| 2 | `pytest` 通过/跳过/失败明细 | ✅ 已验证：543 / 9 / 0，见 §10.1 |
+| 3 | `prompt-hub serve` 与 `GET /`、`/api/health`、`/api/stats` | ✅ 已验证，见 §10.3 |
+| 4 | 中文 / 空格 / UTF-8 路径与符号链接路径 | ✅ 已验证，见 §10.3 |
+| 5 | 默认资料库目录的实际落点 | ✅ 已验证，见 §10.3（印证 B1） |
+| 6 | `systemctl --user`、`journalctl --user`、`Linger` 状态 | ✅ 已验证，见 §10.4 |
+
+### 仍需验证（属于后续阶段）
+
+| # | 项目 | 计划阶段 |
+| --- | --- | --- |
+| 7 | `xdg-open` 在无桌面会话时的失败路径是否返回可读错误而不是崩溃 | Phase 4/5（需要安装 `xdg-utils` 或模拟缺失） |
+| 8 | `deploy/linux/*.sh` 与 systemd unit 的幂等性、重启策略、日志进入 journald | Phase 4/5 |
+| 9 | `install.sh` / `update.sh` 的幂等性与“更新不动用户数据”的实证 | Phase 4/10 |
+| 10 | 缩略图生成、导入流程在真实资料库数据量下的表现 | Phase 5（需要真实资料库） |
+| 11 | GPU / ComfyUI Worker 路径 | 不在第一阶段范围（Linux Worker 暂不支持） |
