@@ -30,8 +30,8 @@ Linux 支持由社区适配分支提供，状态为 **Experimental**，不随官
 | Compute Worker（本机 ComfyUI 执行端） | 暂不支持 |
 | SMB 双机配对、LoRA 正式训练 | 暂不支持（仅 Windows） |
 
-安装与更新见[Linux 安装](docs/linux/INSTALL.md)与[Linux 更新](docs/linux/UPDATE.md)，
-兼容性结论见[Linux 兼容性审计](docs/linux/COMPATIBILITY_AUDIT.md)。
+分支做了什么、怎么用、怎么验证见[Linux 适配说明](docs/linux/README.md)；
+具体步骤见[安装](docs/linux/INSTALL.md)与[更新](docs/linux/UPDATE.md)。
 
 ## 五分钟开始
 
