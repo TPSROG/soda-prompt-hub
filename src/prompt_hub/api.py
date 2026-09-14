@@ -52,7 +52,7 @@ from prompt_hub.lora_projects import LoraProjectStore
 from prompt_hub.lora_routes import create_lora_router
 from prompt_hub.maintenance import BackupManager
 from prompt_hub.maintenance_routes import backup_job, create_maintenance_router
-from prompt_hub.media import resolve_media_path
+from prompt_hub.media import media_type_for, resolve_media_path
 from prompt_hub.model_connections import MODEL_REF_PATTERN, ModelConnectionStore
 from prompt_hub.model_routes import create_model_router
 from prompt_hub.oc_manager import archive_import, build_oc_creative_seed, parse_oc_manager_json
@@ -819,7 +819,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         if path is None:
             raise HTTPException(status_code=404, detail="Result image not found")
-        return FileResponse(path)
+        return FileResponse(path, media_type=media_type_for(path))
 
     @application.post("/api/import")
     def rebuild_index() -> dict[str, Any]:
@@ -898,7 +898,7 @@ def _media_response(
     path = resolve_media_path(settings, source_id, variant, relative_path)
     if path is None:
         raise HTTPException(status_code=404, detail="Media not found")
-    return FileResponse(path)
+    return FileResponse(path, media_type=media_type_for(path))
 
 
 def _attach_visual_urls(results: list[dict[str, Any]], safety_filter: str = "") -> None:
