@@ -5,6 +5,19 @@
 
 ## [未发布]
 
+### Linux 支持（实验性，非官方构建）
+
+- 新增 `deploy/linux/`：安装、卸载、更新、启停、状态脚本与 systemd **用户**服务。
+  不需要 `sudo`，服务以当前用户运行，默认只监听 `127.0.0.1:8765`。
+- 新增 `soda-prompt-hub` 便利命令：`start` / `stop` / `restart` / `status` / `logs` / `serve` / `update` / `version`。
+- 新增 `tests/linux/`：部署层静态契约测试，以及使用隔离 `HOME` / XDG 路径的 Linux 行为测试。
+- 新增 `.github/workflows/linux.yml`：Ubuntu 22.04 与 24.04 完整测试、部署冒烟、systemd 用户服务验收。
+- 新增 `.github/workflows/upstream-sync.yml`：每日检查上游更新，自动建同步分支并开 PR；出现冲突时开 Issue，不直接合并。
+- 新增 `.github/workflows/release-linux.yml`：上游版本变化且 Linux CI 通过时产出 `tar.gz` 与 `SHA256SUMS`。
+- 新增 `scripts/linux/check-env.sh` 环境自检；Linux 文档见 `docs/linux/`。
+- 修复：`install.sh --no-service` 打印的直接运行命令此前漏掉 `PROMPT_HUB_MODELS_ROOT`。
+- 已知限制：Compute Worker（本机 ComfyUI 执行端）、SMB 双机配对与 LoRA 正式训练仍仅限 Windows。
+
 ### 1.1.1 预发布修复
 
 - Windows 数据集交付“打开所在文件夹”改用 `explorer.exe`；macOS 与 Linux 使用各自文件管理器，并把启动失败转为可读错误。

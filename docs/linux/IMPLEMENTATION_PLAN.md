@@ -213,7 +213,40 @@ docs(linux): add Linux installation guide
 | 访问 `http://127.0.0.1:8765` | ✅ 200 |
 | `./deploy/linux/update.sh` 安全更新且不丢用户资料 | ✅ 见上表 8–10 |
 
+### Phase 5｜Linux 测试 — ✅ 已完成
+
+| 项目 | 结果 |
+| --- | --- |
+| 静态契约测试 | `tests/linux/test_linux_packaging.py`（脚本清单、严格模式、不依赖 CWD、无 sudo、无 777、不把远程内容管道给 shell、默认只用 127.0.0.1、unit 必须是用户服务且有重启策略、模板占位符必须全部被替换、XDG 路径、update 仅快进、uninstall 默认保留数据、LF/UTF-8/无本机路径、`bash -n`） |
+| 行为测试 | `tests/linux/test_linux_deployment.py`（隔离 `HOME`/XDG 下跑 help、未安装时的错误提示、`install --no-service` → start → 健康检查 → status → stop 全流程，并验证程序与用户数据分离） |
+| 结果 | 新增用例 **18 passed**；完整套件 **561 passed / 9 skipped / 0 failed**（WSL2 Ubuntu 24.04，覆盖率 83.4%） |
+| 抓到的真实缺陷 | `install.sh --no-service` 打印的直接运行命令漏了 `PROMPT_HUB_MODELS_ROOT`（已修复） |
+| 上游契约约束 | `tests/test_public_docs.py` 要求 `docs/*.md` 顶层**恰好**是 12 个既有文件，因此 Linux 文档统一放在 `docs/linux/` 子目录（不改上游契约） |
+
+### Phase 6｜Linux CI — ✅ 工作流就绪
+
+`.github/workflows/linux.yml`：
+
+- `tests` 作业：`ubuntu-22.04` 与 `ubuntu-24.04` 矩阵，装 Node（测试套件的隐性依赖），`uv sync --locked` → 完整 `pytest` → **部署冒烟**（`install.sh --no-service` → `start.sh` → `/api/health` → `status.sh` → `stop.sh`）。
+- `systemd-user-service` 作业：在 runner 具备用户级 systemd 时执行真实安装、`systemctl --user status`、健康检查、`uninstall.sh`，并断言卸载后用户数据仍在。
+- 刻意**不重复**上游 `ci.yml` 已做的 ruff / ty / build。
+
+### Phase 7｜上游同步 — ✅ 工作流就绪
+
+`.github/workflows/upstream-sync.yml`：每日 02:00 UTC 检查上游；有更新则建 `linux/sync-<sha>` 分支（推送后自动触发 Linux CI）→ 尝试合并 → 成功开 PR 并把新基线写入 `.github/upstream-baseline.txt`，冲突则开 Issue 并保留基线。**绝不**直接合并到维护分支。
+
+### Phase 8｜自动 Release — ✅ 工作流就绪
+
+`.github/workflows/release-linux.yml`：Linux 工作流成功后检查版本，若该版本尚无 `v<版本>-linux-<日期>` 发行包，则产出 `soda-prompt-hub-linux-x86_64-<版本>-<日期>.tar.gz` + `SHA256SUMS` 并创建预发布。打包逻辑已在 WSL 端到端验证（3.1 MB 包，解包后 `install.sh` 可用且服务健康）。
+
+### Phase 9｜文档 — ✅ 完成
+
+`docs/linux/INSTALL.md`、`docs/linux/UPDATE.md`、README 的 Linux 章节（含 `Experimental` 支持矩阵与 Linux 数据目录）、`CHANGELOG.md` 的 Linux 条目。
+
 ### 待办
 
-Phase 5（`tests/linux/`）→ Phase 6（Linux CI）→ Phase 7（上游同步）→ Phase 8（自动 Release）→ Phase 9（文档）；
-另需在后续阶段处理 G1（向上游提交 `linux_local` 使用模式）。
+| 项目 | 说明 |
+| --- | --- |
+| 真实 runner 验证 | 三个工作流尚未在 GitHub 上实际运行过（需要先 push）。注意 **fork 中的 schedule 工作流默认被禁用**，需在仓库 Actions 页面手动启用 |
+| G1 反哺上游 | 向上游提交 `linux_local` 使用模式（阶段独立，不阻塞 Linux 侧） |
+| Phase 10 | 干净 Ubuntu 上的完整验收（install → systemd → 8765 → update 后数据不丢）已在 WSL2 完成；如需真实 VPS，可在 push 后重跑 |
