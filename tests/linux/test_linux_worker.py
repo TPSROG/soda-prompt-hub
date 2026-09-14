@@ -11,6 +11,7 @@ checked as an image, and the whole loop runs without a GPU.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import io
 import json
@@ -106,14 +107,36 @@ class ComfyHandler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
 
+class AuthenticatedComfyHandler(ComfyHandler):
+    """ComfyUI behind HTTP Basic auth, as a reverse proxy would expose it."""
+
+    expected = "Basic " + base64.b64encode(b"worker:secret").decode("ascii")
+
+    def _authorized(self) -> bool:
+        if self.headers.get("Authorization") == self.expected:
+            return True
+        self.send_response(401)
+        self.send_header("WWW-Authenticate", 'Basic realm="comfyui"')
+        self.end_headers()
+        return False
+
+    def do_GET(self) -> None:
+        if self._authorized():
+            super().do_GET()
+
+    def do_POST(self) -> None:
+        if self._authorized():
+            super().do_POST()
+
+
 @contextmanager
-def comfy_server() -> Any:
-    ComfyHandler.state = {}
-    server = ThreadingHTTPServer(("127.0.0.1", 0), ComfyHandler)
+def comfy_server(handler: type[ComfyHandler] = ComfyHandler) -> Any:
+    handler.state = {}
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        yield f"http://127.0.0.1:{server.server_port}", ComfyHandler.state
+        yield f"http://127.0.0.1:{server.server_port}", handler.state
     finally:
         server.shutdown()
         server.server_close()
@@ -209,3 +232,61 @@ def test_worker_completes_a_generation_task_on_linux(tmp_path: Path) -> None:
 
     # 任务文件已从 outbox 归档, 不会重复执行
     assert not (bridge / "outbox" / f"{task_id}.json").exists()
+
+
+def test_worker_uses_credentials_embedded_in_the_comfyui_url(tmp_path: Path) -> None:
+    """`http://user:password@host` 必须转成 Authorization 头, 且不残留凭据。"""
+    mount = tmp_path / "mount"
+    bridge = mount / "prompt-hub"
+    package_path = bridge / "packages" / "auth.json"
+    _write_json(
+        package_path,
+        {
+            "format": "soda-comfyui-package-v1",
+            "workflow_id": "linux-auth",
+            "api_prompt": {"1": {"class_type": "Example", "inputs": {}}},
+        },
+    )
+    store = RemoteNodeStore(tmp_path / "state")
+    store.initialize()
+    store.save_node(
+        "compute-5060ti",
+        {
+            "role": "compute_5060ti",
+            "host": "127.0.0.1",
+            "smb_mount": str(mount),
+            "enabled": True,
+        },
+    )
+    store.prepare_bridge("compute-5060ti")
+
+    with comfy_server(AuthenticatedComfyHandler) as (url, _state):
+        credentialed = url.replace("http://", "http://worker:secret@")
+        worker = WindowsWorker(
+            WorkerConfig(
+                bridge_root=bridge,
+                comfyui_url=credentialed,
+                worker_id="linux-worker",
+                history_poll_seconds=0.01,
+                task_timeout_seconds=5,
+                http_timeout_seconds=3,
+            )
+        )
+        assert worker.client.base_url == url, "base_url 不应残留凭据"
+        assert worker.self_test()["comfyui_reachable"] is True
+        submitted = store.submit_task(
+            "compute-5060ti",
+            {
+                "task_type": "comfyui_generate",
+                "payload": {
+                    "generation_package": "packages/auth.json",
+                    "workflow_id": "linux-auth",
+                    "output_profile": "anima",
+                },
+                "manifest": [_manifest(package_path, bridge)],
+            },
+        )
+        assert worker.run_once() is True
+
+    result = json.loads((bridge / "inbox" / f"{submitted['task_id']}.json").read_text(encoding="utf-8"))
+    assert result["status"] == "completed"
