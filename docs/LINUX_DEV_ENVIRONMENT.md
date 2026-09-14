@@ -62,8 +62,15 @@
 | 路径 | `~/projects/soda-prompt-hub`（Linux 原生文件系统，非 `/mnt/*`） |
 | origin | `https://github.com/TPSROG/soda-prompt-hub.git` |
 | upstream | `https://github.com/cOkieeman/soda-prompt-hub.git` |
+| `win`（本地桥接） | `/mnt/d/Github/manbo linux` —— 只在本机使用，用于把 Windows 侧的本地提交同步进 WSL，**无需 push 到 GitHub** |
 | 基线分支 | `linux/main`（基于 `upstream/main`，`e96249b`） |
 | 大小 | 源码树约 12 MB；含 `.venv` 约 262 MB |
+
+同步本地提交到 WSL 的方式（不 push 时使用）：
+
+```bash
+git fetch win linux/main && git merge --ff-only win/linux/main
+```
 
 ## Test command
 
