@@ -1,0 +1,190 @@
+name: Upstream sync
+
+# 主任务书 §15 / §16：
+#   每日检查上游是否有新提交 → 建同步分支 → 尝试合并 → 交给 Linux CI 验证
+#   合并成功：开 Pull Request；出现冲突：开 Issue
+#   **绝不**直接把上游强行合并到维护分支
+#
+# 基线记录在 .github/upstream-baseline.txt：合并成功时由同步分支一起更新，
+# PR 合并后基线自动前进；冲突时不动基线，等人工处理。
+#
+# 注意：GitHub 会默认禁用 fork 中的 schedule 工作流，需要在仓库 Actions 页面手动启用。
+
+on:
+  schedule:
+    - cron: "0 2 * * *" # 每日 02:00 UTC（10:00 CST），不做高频轮询
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: cOkieeman/soda-prompt-hub
+  # 同步分支从哪个分支拉出；可用仓库变量覆盖
+  SYNC_BASE_BRANCH: ${{ vars.SYNC_BASE_BRANCH || 'linux/main' }}
+
+jobs:
+  check:
+    name: 检查上游更新
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 配置 remote 并拉取上游
+        run: |
+          set -Eeuo pipefail
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git" 2>/dev/null || true
+          git fetch --no-tags upstream main
+
+      - name: 与基线比较
+        id: compare
+        run: |
+          set -Eeuo pipefail
+          upstream_sha="$(git rev-parse upstream/main)"
+          baseline_file=".github/upstream-baseline.txt"
+          if [[ -f "${baseline_file}" ]]; then
+            baseline="$(tr -d '[:space:]' <"${baseline_file}")"
+          else
+            baseline="$(git merge-base HEAD upstream/main)"
+          fi
+          {
+            echo "upstream=${upstream_sha}"
+            echo "baseline=${baseline}"
+          } >>"${GITHUB_OUTPUT}"
+          if [[ "${upstream_sha}" == "${baseline}" ]]; then
+            echo "changed=false" >>"${GITHUB_OUTPUT}"
+          else
+            echo "changed=true" >>"${GITHUB_OUTPUT}"
+          fi
+
+      - name: 上游无变化
+        if: steps.compare.outputs.changed == 'false'
+        run: echo "上游未变化：${{ steps.compare.outputs.upstream }}"
+
+      - name: 汇总上游变化
+        if: steps.compare.outputs.changed == 'true'
+        id: summary
+        run: |
+          set -Eeuo pipefail
+          range="${{ steps.compare.outputs.baseline }}..${{ steps.compare.outputs.upstream }}"
+          count="$(git rev-list --count "${range}")"
+          {
+            echo "count=${count}"
+            echo "short=${range#*..}"
+          } >>"${GITHUB_OUTPUT}"
+          {
+            echo "## 上游更新"
+            echo
+            echo "- Upstream: \`${{ steps.compare.outputs.upstream }}\`"
+            echo "- Previous: \`${{ steps.compare.outputs.baseline }}\`"
+            echo "- 提交数: ${count}"
+            echo
+            echo '```'
+            git log --oneline --no-decorate --max-count=50 "${range}"
+            echo '```'
+            echo
+            echo "Linux CI: pending"
+          } >upstream-changes.md
+          cat upstream-changes.md
+
+      - name: 尝试合并到同步分支
+        if: steps.compare.outputs.changed == 'true'
+        id: merge
+        run: |
+          set -Eeuo pipefail
+          short="$(git rev-parse --short upstream/main)"
+          branch="linux/sync-${short}"
+          base="${SYNC_BASE_BRANCH}"
+          if git ls-remote --exit-code --heads origin "${base}" >/dev/null 2>&1; then
+            git fetch origin "${base}"
+            git switch --create "${branch}" "origin/${base}"
+          else
+            echo "::warning::找不到 ${base}，改用当前分支"
+            base="$(git rev-parse --abbrev-ref HEAD)"
+            git switch --create "${branch}"
+          fi
+          echo "branch=${branch}" >>"${GITHUB_OUTPUT}"
+          echo "base=${base}" >>"${GITHUB_OUTPUT}"
+          if git merge --no-edit upstream/main; then
+            echo "conflict=false" >>"${GITHUB_OUTPUT}"
+          else
+            echo "conflict=true" >>"${GITHUB_OUTPUT}"
+            git diff --name-only --diff-filter=U >conflict-files.txt || true
+            git merge --abort || true
+          fi
+
+      - name: 记录新基线
+        if: steps.merge.outputs.conflict == 'false'
+        run: |
+          set -Eeuo pipefail
+          printf '%s\n' "${{ steps.compare.outputs.upstream }}" >.github/upstream-baseline.txt
+          git add .github/upstream-baseline.txt
+          git -c user.name="upstream-sync[bot]" -c user.email="upstream-sync@users.noreply.github.com" \
+            commit -m "chore: record upstream baseline ${{ steps.summary.outputs.short }}"
+
+      - name: 推送同步分支
+        if: steps.merge.outputs.conflict == 'false'
+        run: git push --force-with-lease origin "${{ steps.merge.outputs.branch }}"
+
+      - name: 创建同步 Pull Request
+        if: steps.merge.outputs.conflict == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          branch="${{ steps.merge.outputs.branch }}"
+          if [[ -n "$(gh pr list --head "${branch}" --state open --json number --jq '.[].number')" ]]; then
+            echo "已存在 ${branch} 的 PR，跳过"
+            exit 0
+          fi
+          {
+            cat upstream-changes.md
+            echo
+            echo "Linux CI 会在本分支推送后自动运行；通过后即可合并。"
+            echo
+            echo "> 本 PR 只做上游同步，不含任何 Linux 适配改动。"
+          } >pr-body.md
+          gh pr create \
+            --base "${{ steps.merge.outputs.base }}" \
+            --head "${branch}" \
+            --title "chore: sync upstream ${{ steps.summary.outputs.short }}" \
+            --body-file pr-body.md
+
+      - name: 冲突时创建 Issue
+        if: steps.merge.outputs.conflict == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          upstream_sha="${{ steps.compare.outputs.upstream }}"
+          marker="<!-- upstream-sha:${{ steps.compare.outputs.upstream }} -->"
+          issues="$(gh issue list --state open --search "Upstream update conflict in:title" --limit 100 --json number,body)"
+          if printf '%s' "${issues}" | jq -e --arg sha "${upstream_sha}" \
+            'map(select(.body | contains($sha))) | length > 0' >/dev/null; then
+            echo "同一上游提交的 Issue 已存在，跳过"
+            exit 0
+          fi
+          {
+            echo "${marker}"
+            cat upstream-changes.md
+            echo
+            echo "## Linux adapter 与 upstream 存在冲突"
+            echo
+            echo '```'
+            cat conflict-files.txt
+            echo '```'
+            echo
+            echo "需要人工处理：在本地把 upstream/main 合并到 ${SYNC_BASE_BRANCH}，解决冲突后推送。基线未更新，下一次检查仍会报告同一次上游更新。"
+          } >issue-body.md
+          gh issue create \
+            --title "Upstream update conflict: ${{ steps.summary.outputs.short }}" \
+            --body-file issue-body.md
