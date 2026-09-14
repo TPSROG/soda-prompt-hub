@@ -43,6 +43,11 @@ Soda Prompt Hub Linux 适配审计报告（第一阶段交付物）。
 > 2026-09-14 **严格复核补充**：逐条重跑主任务书 §1.1 的全部关键词后，新增发现 **2 项 Linux 受限点**
 > （分类属 C 类，见 §11）。上表为第一轮结论；复核结果不改变“核心无需修改即可运行”的判断。
 
+> 2026-09-14 **CI 首轮实测补充**：在 Ubuntu 22.04 与 24.04 上跑完整套件后，发现并修复了
+> **1 个真实缺陷**（WebP 媒体类型依赖系统 MIME 数据库，见 §12.1）与 **1 个测试缺陷**
+> （心跳新鲜度用例时间敏感，见 §12.2）。§2 的“Linux 无需修改即可运行”结论仍然成立，
+> 但这两项说明：**“能跑起来”与“行为正确”必须靠实机 CI 才能分开验证。**
+
 ---
 
 ## 1. 已兼容（A）
@@ -252,6 +257,10 @@ Soda Prompt Hub Linux 适配审计报告（第一阶段交付物）。
 | 跳过项 | 9 个，全部为 macOS 专属 |
 | 结论 | 上游核心在 Linux 上**开箱可用**，无需任何核心代码修改 |
 
+> 上表是**未做任何修复**时的首轮基线，用于回答“上游核心能否开箱运行”。
+> 加入 `tests/linux` 与两处修复后的最终状态为 **577 passed / 9 skipped**，
+> 且 GitHub Actions 四个作业全绿；两处修复的来龙去脉见 §12。
+
 ### 10.2 新发现：测试套件隐性依赖 Node.js（E 类，建议反哺上游）
 
 | 项目 | 内容 |
@@ -333,6 +342,45 @@ Soda Prompt Hub Linux 适配审计报告（第一阶段交付物）。
 
 两项都属于“Linux 使用受限”，不影响第一阶段“可运行 / 可部署 / 可更新”的结论，
 也不改变 §0 中“核心无需修改即可运行”的判断。
+
+---
+
+## 12. CI 首轮实测发现并已修复的缺陷（2026-09-14）
+
+静态审计只能回答“能不能跑”，下面的问题只有在真实 Ubuntu 上跑完整套件才会暴露。
+两项都已在本分支修复，并各自补了回归测试；修复同时作为上游 PR 草稿记录在 `docs/linux/README.md`。
+
+### 12.1 WebP 媒体类型依赖系统 MIME 数据库（真实缺陷，已修复）
+
+| 项目 | 内容 |
+| --- | --- |
+| 位置 | `src/prompt_hub/api.py:822`、`api.py:901`、`source_routes.py:124`、`workspace_routes.py:674` |
+| 现象 | Ubuntu 22.04 上，资料库来源缩略图与创作项目结果图返回 `Content-Type: application/octet-stream`，浏览器不内联显示（测试断言 `'application/octet-stream' == 'image/webp'` 失败） |
+| 原因 | 这些 `FileResponse(path)` 没有显式 `media_type`，Starlette 于是调用 `mimetypes.guess_type()`。**CPython 内置 MIME 表不含 `.webp`**（实测：纯内置表返回 `(None, None)`，`.jpg` 正常），该映射只能来自系统 `/etc/mime.types`：Ubuntu 24.04 有，22.04 没有 |
+| 影响面 | 任何 `/etc/mime.types` 不完整的 Linux（22.04 LTS、最小化容器、服务器镜像）；与平台无关，Windows 上属同类隐患 |
+| 修复 | 新增 `prompt_hub.media.media_type_for(path)`：对项目自己产出的图片格式（webp/png/jpg/jpeg/gif/avif/bmp/tif/tiff）给出确定类型，其余后缀仍交给 `mimetypes`，未识别回退 `application/octet-stream`；应用到上述 4 个端点 |
+| 回归测试 | `tests/test_media_types.py`：把 `mimetypes.guess_type` 打桩成永远返回 `None`，断言各格式仍返回正确类型 |
+| 复现证据 | 在 WSL 中隐藏 `/etc/mime.types`：修复前 3 个测试失败，修复后同一条件下 64 个相关测试全部通过（系统文件已还原） |
+| 分类 | 属 §2「必须修改」类；本分支已修，另可作为上游 PR |
+
+### 12.2 心跳新鲜度用例时间敏感（测试缺陷，已修复）
+
+| 项目 | 内容 |
+| --- | --- |
+| 位置 | `tests/test_desktop_connection.py::test_connection_only_reports_fresh_live_worker` |
+| 现象 | 偶发失败：`assert 'connected' == 'stale'`。同一提交在 ubuntu-24.04 通过、在较慢的 ubuntu-22.04（整轮 223 秒）失败 |
+| 原因 | 参数表在**收集阶段**计算 `datetime.now(UTC) + 2 分钟`，而 `connection_summary()` 判定 stale 的条件是 `age < -15s` 或 `age > 25s`。用例若在收集后 **105～145 秒**之间执行，`age` 落进 `-15～+25 秒` 窗口，于是期望 stale 得到 connected |
+| 实证 | 直接构造心跳测判定窗口：未来 10 秒→`connected`、未来 30 秒→`stale`、过去 30 秒→`stale` |
+| 修复 | “未来 2 分钟”的时间戳改到用例内部生成（参数表用哨兵值占位），与判定使用同一时刻的时钟 |
+| 分类 | 与平台无关的测试稳定性问题；本分支已修，可另行反哺上游 |
+
+### 12.3 修复后的最终状态
+
+| 项目 | 值 |
+| --- | --- |
+| 完整套件（WSL2 Ubuntu 24.04） | **577 passed / 9 skipped / 0 failed** |
+| GitHub Actions（`linux/main`） | 4 个作业全绿：格式/Lint/类型检查、Tests on ubuntu-22.04、Tests on ubuntu-24.04、systemd 用户服务 |
+| 结论 | 第一阶段“可运行 / 可部署 / 可更新”的验收不受影响；上述两项属额外发现，均已闭环 |
 
 ---
 

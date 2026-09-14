@@ -219,7 +219,7 @@ docs(linux): add Linux installation guide
 | --- | --- |
 | 静态契约测试 | `tests/linux/test_linux_packaging.py`（脚本清单、严格模式、不依赖 CWD、无 sudo、无 777、不把远程内容管道给 shell、默认只用 127.0.0.1、unit 必须是用户服务且有重启策略、模板占位符必须全部被替换、XDG 路径、update 仅快进、uninstall 默认保留数据、LF/UTF-8/无本机路径、`bash -n`） |
 | 行为测试 | `tests/linux/test_linux_deployment.py`（隔离 `HOME`/XDG 下跑 help、未安装时的错误提示、`install --no-service` → start → 健康检查 → status → stop 全流程，并验证程序与用户数据分离） |
-| 结果 | 新增用例 **22 passed**；完整套件 **565 passed / 9 skipped / 0 failed**（WSL2 Ubuntu 24.04） |
+| 结果 | 新增用例 **25 passed**；完整套件 **577 passed / 9 skipped / 0 failed**（WSL2 Ubuntu 24.04） |
 | 抓到的真实缺陷 | `install.sh --no-service` 打印的直接运行命令漏了 `PROMPT_HUB_MODELS_ROOT`（已修复） |
 | 上游契约约束 | `tests/test_public_docs.py` 要求 `docs/*.md` 顶层**恰好**是 12 个既有文件，因此 Linux 文档统一放在 `docs/linux/` 子目录（不改上游契约） |
 | §12 清单覆盖闭环 | 严格复核发现首轮缺 4 项，已补齐：中文 + UTF-8 + 空格路径、`PROMPT_HUB_MODELS_ROOT` 行为、资料库**写入 / 读取 / 重启后保留**、`localhost` 访问 |
@@ -246,10 +246,25 @@ docs(linux): add Linux installation guide
 
 `docs/linux/INSTALL.md`、`docs/linux/UPDATE.md`、README 的 Linux 章节（含 `Experimental` 支持矩阵与 Linux 数据目录）、`CHANGELOG.md` 的 Linux 条目。
 
+### Phase 6 的真实验证（push 之后的 2026-09-14 晚）
+
+`linux/main` 已推送到 `TPSROG/soda-prompt-hub`，GitHub Actions 首轮即暴露出两个问题，
+修复后四个作业全绿。完整记录见审计 §12。
+
+| 轮次 | ubuntu-22.04 | ubuntu-24.04 | lint | systemd | 处理 |
+| --- | --- | --- | --- | --- | --- |
+| ① `3989340` | ❌ 3 个 WebP 媒体类型失败 | ✅ | ✅ | ✅ | 新增 `media_type_for()`，4 个图片端点显式指定类型 |
+| ② `89ab5df` | ❌ 1 个时间敏感用例 | ✅ | ❌（我漏跑 ruff） | ✅ | 时间戳改到执行时生成；修正全角标点并重排 |
+| ③ `351d514` | ✅ | ✅ | ✅ | ✅ | **全绿** |
+
+这两轮说明：**Phase 6 的价值不在于“多跑一遍测试”，而在于把静态审计看不见的行为差异暴露出来。**
+
 ### 待办
 
 | 项目 | 说明 |
 | --- | --- |
-| 真实 runner 验证 | 三个工作流尚未在 GitHub 上实际运行过（需要先 push）。注意 **fork 中的 schedule 工作流默认被禁用**，需在仓库 Actions 页面手动启用 |
-| G1 反哺上游 | 向上游提交 `linux_local` 使用模式（阶段独立，不阻塞 Linux 侧） |
-| Phase 10 | 干净 Ubuntu 上的完整验收（install → systemd → 8765 → update 后数据不丢）已在 WSL2 完成；如需真实 VPS，可在 push 后重跑 |
+| 默认分支 | `schedule` / `workflow_run` / `workflow_dispatch` 都要求工作流存在于**默认分支**；实测 `upstream-sync.yml`、`release-linux.yml` 返回 404（not found on the default branch）。需要把仓库默认分支设为 `linux/main`（或把 Linux 线合进 `main`）才能启用每日检查与自动发布 |
+| §28 上游更新验收 | 依赖上一条；启用后模拟一次上游提交即可验收 |
+| 上游 PR | 两个修复（WebP 媒体类型、心跳用例时间戳）的标题与正文已备在 `docs/linux/README.md`，等待决定是否提交 |
+| G1 / G2 / F1 / F2 | `usage_mode` 的 `linux_local` 语义、SMB 配对限制、数据集浏览的外接卷与快捷入口；可沿用“先修 + 反哺上游”的既有轨道 |
+| Phase 10 | 干净 Ubuntu 上的完整验收已在 WSL2 与 GitHub runner 完成；如需真实 VPS，可在启用默认分支后重跑 |
