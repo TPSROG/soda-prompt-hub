@@ -254,6 +254,40 @@ if [[ "${WITH_WORKER}" -eq 1 ]]; then
     install -m 0755 "${SCRIPT_DIR}/soda-worker.sh" "${WORKER_LAUNCHER}"
     sph_ok "已安装命令: ${WORKER_LAUNCHER}"
 
+    # 让 Core 知道"本机就有一个计算节点"：登记本地节点并把共享目录指向桥接根目录。
+    # 使用项目自己的 RemoteNodeStore，保证与 Core 读写的 schema 完全一致。
+    if [[ -x "${REPO_ROOT}/.venv/bin/python" ]]; then
+        if "${REPO_ROOT}/.venv/bin/python" - "${LIBRARY_ROOT}" "${WORKER_SHARE}" <<'PY'
+import sys
+from pathlib import Path
+
+from prompt_hub.remote_nodes import RemoteNodeStore
+
+library_root, share_root = Path(sys.argv[1]), Path(sys.argv[2])
+store = RemoteNodeStore(library_root / "remote-nodes")
+store.initialize()
+store.save_node(
+    "compute-5060ti",
+    {
+        "role": "compute_5060ti",
+        "enabled": True,
+        "label": "本机 Compute Worker",
+        "host": "127.0.0.1",
+        "smb_mount": str(share_root),
+        "capabilities": ["comfyui_generate"],
+    },
+)
+store.prepare_bridge("compute-5060ti")
+PY
+        then
+            sph_ok "已登记本机计算节点 compute-5060ti（共享目录 ${WORKER_SHARE}）"
+        else
+            sph_warn "登记本机计算节点失败；可在网页的“设备连接”里手动填写共享目录 ${WORKER_SHARE}"
+        fi
+    else
+        sph_warn "缺少虚拟环境，跳过计算节点登记"
+    fi
+
     if [[ "${INSTALL_SERVICE}" -eq 1 ]]; then
         WORKER_UNIT="$(sph_worker_unit_path)"
         WORKER_TEMPLATE="${SCRIPT_DIR}/soda-worker.service"

@@ -53,7 +53,8 @@ REMOTE_STYLES = r"""
   .remote-check input { width: auto; }
   .remote-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
   .remote-form[hidden], .remote-actions[hidden], .remote-page aside[hidden] { display: none; }
-  .remote-page[data-usage-mode="windows_local"] .remote-hero { grid-template-columns: 1fr; }
+  .remote-page[data-usage-mode="windows_local"] .remote-hero,
+  .remote-page[data-usage-mode="linux_local"] .remote-hero { grid-template-columns: 1fr; }
   .remote-actions button { border: 1px solid var(--ink); background: transparent; padding: 9px 10px; font: 900 8px monospace; }
   .remote-actions button.primary { border-color: var(--signal); background: var(--signal); color: white; }
   .remote-actions button { cursor: pointer; transition: background 160ms ease, transform 160ms ease; }
@@ -228,6 +229,7 @@ REMOTE_HTML = rf"""
 <section class="remote-page" id="remotePage" hidden>
   <section class="model-installer-entry"><div><strong>本地模型 · 按需安装</strong><p>WD14 打标、真人打标和相似图检索。与 API 模型服务分开管理，不强制下载。</p></div><button type="button" data-open-optional-models="">管理可选模型 →</button></section>
   <section class="remote-hero" data-usage-only="windows_local"><div class="remote-copy"><span class="eyebrow">Windows 单机模式</span><h1>设备<br>连接</h1><p>工作台与 Worker 在这台电脑上运行，无需配对另一台设备。在启动器设置中填写本机 ComfyUI 地址，即可开始出图。</p></div><aside class="remote-boundary"><span class="section-label">本机使用顺序</span><strong>一个启动器，直接创作</strong><p>启动器自动管理 Core 与 Worker。API 模型的 URL 和 Key 在下方“模型服务”填写；打标和检索模型在“管理可选模型”中按需安装。</p></aside></section>
+  <section class="remote-hero" data-usage-only="linux_local"><div class="remote-copy"><span class="eyebrow">Linux 本机模式</span><h1>设备<br>连接</h1><p>Core 与 Compute Worker 都在这台机器上运行，通过本地桥接目录交换任务，不需要 SMB、也不需要配对另一台设备。把 Worker 的 comfyui_url 指向本机 ComfyUI 即可出图。</p></div><aside class="remote-boundary"><span class="section-label">本机使用顺序</span><strong>本地桥接，直接用</strong><p>Worker 由 systemd 用户服务 <code>soda-worker</code> 托管；桥接目录默认在 <code>~/.local/share/soda-prompt-hub/worker-share/prompt-hub</code>。API 模型的 URL 和 Key 在下方“模型服务”填写。</p></aside></section>
   <section class="remote-hero" data-usage-only="mac_remote"><div class="remote-copy"><span class="eyebrow">Mac 连接 <span data-remote-device-name>__PROMPT_HUB_DEVICE_NAME_HTML__</span></span><h1>设备<br>连接</h1><p>在这里查看 Windows 的运行状态、接收 ComfyUI 出图结果，以及更新 LoRA 和底模清单。数据集整理仍在 Mac 完成；筛标、正则和训练仍由你在 Windows 的 AnimaLoraStudio 中操作。</p></div><aside class="remote-boundary"><span class="section-label">登录信息放在哪里</span><strong>密码由 Mac 钥匙串保存</strong><p>首次填写 Windows 地址与共享名称，保存后点击“连接 Windows”。请在系统窗口完成登录并选择记住密码；软件不会保存账号密码。已有挂载路径也可以继续使用。</p></aside></section>
   <nav class="remote-section-tabs" id="remoteSectionTabs" role="tablist" aria-label="设备连接子页面">
     <button class="remote-section-tab" id="remoteTasksTab" type="button" role="tab" aria-selected="true" aria-controls="remoteTasksPanel" data-remote-view="tasks"><span class="remote-section-tab-icon" aria-hidden="true">●</span><span class="remote-section-tab-copy"><small>01 / 任务</small><strong>任务状态</strong></span><span class="remote-section-tab-count" id="remoteTasksCount">—</span></button>
@@ -505,18 +507,21 @@ REMOTE_SCRIPT = r"""
   function applyUsageMode() {
     if(!window.isPromptHubLocal) return;
     const page=$('#remotePage');
+    const usageMode=document.documentElement.dataset.usageMode;
+    const manager=usageMode==='linux_local' ? 'deploy/linux 安装脚本' : 'Windows 启动器';
+    const localHost=usageMode==='linux_local' ? '本机 Linux' : '本机 Windows';
     document.querySelector('[data-view="remote"]').textContent='设备连接';
     page.querySelector('h1').textContent='设备连接';
     page.querySelector('.remote-tasks-head .section-label').textContent='本机计算任务';
     page.querySelector('.remote-task-guide > p').textContent='这里记录本机出图和模型清单更新。任务完成后可接收结果。';
     page.querySelectorAll('#remoteNodeGrid .remote-form,#remoteNodeGrid .remote-actions').forEach(element=>element.hidden=true);
     page.querySelectorAll('[data-remote-node]').forEach(card=>{
-      card.querySelector('h2').textContent='本机 Windows';
+      card.querySelector('h2').textContent=localHost;
       card.querySelector('.section-label').textContent='本机计算服务';
-      card.querySelector('[data-remote-worker-version]').textContent='本机服务由 Windows 启动器管理，无需另外打开 Worker。';
-      card.querySelector('[data-remote-message]').textContent='本机模式无需配对其他设备。Worker 随启动器自动运行；请在启动器设置中填写本机 ComfyUI 地址。';
+      card.querySelector('[data-remote-worker-version]').textContent=`本机服务由 ${manager} 管理，无需另外打开 Worker。`;
+      card.querySelector('[data-remote-message]').textContent='本机模式无需配对其他设备。Worker 与本机服务一同运行；请在 worker-config.json 中填写本机 ComfyUI 地址。';
     });
-    page.dataset.usageMode='windows_local';
+    page.dataset.usageMode=usageMode;
   }
   function renderLiveConnection(card,summary) {
     const badge=card.querySelector('[data-remote-state]');

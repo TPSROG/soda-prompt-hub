@@ -1,5 +1,5 @@
     const $ = (selector) => document.querySelector(selector);
-    window.isPromptHubLocal = document.documentElement.dataset.usageMode === 'windows_local';
+    window.isPromptHubLocal = ['windows_local','linux_local'].includes(document.documentElement.dataset.usageMode);
     const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
     const formatNumber = (value) => new Intl.NumberFormat('zh-CN').format(value || 0);
     let currentMode = 'home';
