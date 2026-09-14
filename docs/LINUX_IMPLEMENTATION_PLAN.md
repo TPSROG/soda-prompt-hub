@@ -167,3 +167,53 @@ ci: add upstream compatibility workflow
 ci: add Linux release workflow
 docs(linux): add Linux installation guide
 ```
+
+---
+
+## 7. 实施进度与实测证据
+
+### Phase 4｜Linux 部署层 — ✅ 已完成并在 WSL2 实机验证（2026-09-14）
+
+环境：WSL2 + Ubuntu 24.04.5，systemd 255，`systemctl --user` 可用。
+
+| # | 验收项 | 结果 |
+| --- | --- | --- |
+| 1 | `./deploy/linux/install.sh` | ✅ 一次通过：环境检查 → 建目录 → `uv sync --locked` → 写 unit → 启用并启动 → 健康检查 |
+| 2 | 渲染后的 unit | ✅ 占位符全部替换为绝对路径；`Environment=` 注入资料库/模型目录；`ExecStart` 指向 `.venv/bin/prompt-hub` |
+| 3 | `systemctl --user status soda-prompt-hub` | ✅ `active (running)`，`enabled`，Main PID 正常，日志进入 journald |
+| 4 | 监听范围 | ✅ 仅 `127.0.0.1:8765`（`ss -ltn` 实测），未暴露 `0.0.0.0` |
+| 5 | `GET /`、`/api/health`、`/api/stats` | ✅ 200 / `status: ok` / 正常 |
+| 6 | `soda-prompt-hub version` / `status` | ✅ 输出 1.1.1 与完整状态报告（含 unit、PID、监听、健康、数据占用、日志） |
+| 7 | `install.sh` 幂等（重复执行） | ✅ 检测到既有安装并沿用既有数据目录，只重启服务，不重复建目录 |
+| 8 | `update.sh` | ✅ 拉取（已是最新）→ 依赖同步 → 重启 → 健康检查；**更新前后数据库大小与 mtime 完全一致** |
+| 9 | 用户数据实证 | ✅ 更新前后标记文件 `private/personal-prompts/wsl-marker.txt` 与数据库均保留 |
+| 10 | `update.sh` 脏工作区保护 | ✅ 工作区有未提交改动时拒绝执行并给出提示（需 `--force`） |
+| 11 | 崩溃自动重启 | ✅ `kill -9` 主进程后第 5 秒自动重启，健康检查恢复（`Restart=on-failure` + `RestartSec=5`） |
+| 12 | 无 systemd 场景（direct 模式） | ✅ `--no-service` + `start.sh`/`stop.sh` 以进程方式启停成功（用 `/tmp` 覆盖 XDG 路径、端口 8799 验证，未影响正式安装） |
+| 13 | `uninstall.sh`（默认） | ✅ 停止并禁用服务、移除 unit 与便利命令；**资料库、标记文件、数据库全部保留** |
+| 14 | 重新安装 | ✅ 卸载后重装恢复正常，健康检查通过 |
+
+安装布局实测结果：
+
+| 内容 | 实测位置 |
+| --- | --- |
+| 程序 | `/home/voldm/projects/soda-prompt-hub`（仓库本体） |
+| Python 环境 | `<repo>/.venv` |
+| 用户数据 | `~/.local/share/soda-prompt-hub/{library,models}` |
+| 安装记录 | `~/.local/share/soda-prompt-hub/install.env` |
+| systemd unit | `~/.config/systemd/user/soda-prompt-hub.service` |
+| 便利命令 | `~/.local/bin/soda-prompt-hub` |
+
+### 与主任务书 §27 第一阶段验收标准的对照
+
+| 验收步骤 | 状态 |
+| --- | --- |
+| 干净环境中 clone 后执行 `./deploy/linux/install.sh` | ✅ 已完成（WSL2 Ubuntu 24.04） |
+| `systemctl --user status soda-prompt-hub` 显示运行中 | ✅ |
+| 访问 `http://127.0.0.1:8765` | ✅ 200 |
+| `./deploy/linux/update.sh` 安全更新且不丢用户资料 | ✅ 见上表 8–10 |
+
+### 待办
+
+Phase 5（`tests/linux/`）→ Phase 6（Linux CI）→ Phase 7（上游同步）→ Phase 8（自动 Release）→ Phase 9（文档）；
+另需在后续阶段处理 G1（向上游提交 `linux_local` 使用模式）。
