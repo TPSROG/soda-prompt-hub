@@ -1,9 +1,9 @@
 # 快速开始
 
-先选一种使用方式；两套安装包都保持1.1.0，但2026-09-13构建是未正式签名、待手动验收的Pre-release。
+先选一种使用方式；两套1.1.1安装包都是未正式签名、待手动验收的Pre-release。
 
-- [Windows 单机版](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-windows-standalone-20260913)：只装 Desktop Setup，不另开独立 Worker。
-- [Mac + Windows Worker](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-mac-windows-20260913)：Mac 装 DMG，Windows 装 Worker Setup。
+- [Windows 单机版](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.1-windows-standalone-20260914)：只装 Desktop Setup，不另开独立 Worker。
+- [Mac + Windows Worker](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.1-mac-windows-20260914)：Mac 装 DMG，Windows 装 Worker Setup。
 
 下载 Assets 中的安装器并核对 `SHA256SUMS`。遇到安全阻止或“已损坏”提示，先查看
 [安装说明](COMMERCIAL_RELEASE.md)与[排错](TROUBLESHOOTING.md)，不要关闭系统安全保护。
@@ -18,7 +18,7 @@
 
 ## Windows 单机：第一次安装
 
-1. 运行 `Soda-Prompt-Hub-Desktop-1.1.0-Setup.exe`，安装到所选用户程序目录。
+1. 运行 `Soda-Prompt-Hub-Desktop-1.1.1-Setup.exe`，安装到所选用户程序目录。
 2. 启动自己的 ComfyUI，确认其本机网页可打开。
 3. 从开始菜单打开 `Soda Prompt Hub`。启动器自动准备本地任务目录并管理 Core / Worker；无需共享授权。
 4. 在启动器设置填写 ComfyUI 地址（默认 `http://127.0.0.1:8188`），就绪后打开工作台。
@@ -29,7 +29,7 @@
 
 ## Mac 管理 Windows：第一次安装
 
-1. 打开 `Soda-Prompt-Hub-1.1.0-macOS-arm64.dmg`。
+1. 打开 `Soda-Prompt-Hub-1.1.1-macOS-arm64.dmg`。
 2. 把 `Soda Prompt Hub.app` 拖入 Applications。
 3. 按上面的校验与系统安全提示说明确认来源；当前包没有 Developer ID 签名或 Apple 公证。
 4. App 会使用包内 Python 3.12 和固定依赖启动 Core，不需要安装 Homebrew、Python 或 `uv`。
@@ -84,6 +84,6 @@ Prompt Hub 不保存 token，也不会把下载数据放进 GitHub 仓库。点�
 - “数据集”可以选择一个本地图片目录并进行只读扫描；
 - 单机“设备连接”不要求配对另一台设备；双机未配对时显示配置引导，配对后要检查实时状态，不能只看上次自检。
 
-逐项验收按[两模式手动验收清单](acceptance/manual-1.1.0-20260913.md)执行。
+逐项验收按[1.1.1 pre1 两模式手动验收清单](acceptance/manual-1.1.1-pre1-20260914.md)执行。
 
 若不符合，按[常见问题与排错](TROUBLESHOOTING.md)处理。

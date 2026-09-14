@@ -4,7 +4,7 @@
 在同一台Windows上管理Prompt Hub Core，默认自动准备并启动本机Compute Worker。用户可手动停止本机Worker，
 但不需要再开独立的Soda Compute Worker，也不经过SMB配对。
 
-普通用户请从[Windows单机Release](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-windows-standalone-20260913)
+普通用户请从[Windows单机Release](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.1-windows-standalone-20260914)
 下载Setup，按[快速开始](../../docs/QUICK_START.md)安装；下方构建命令仅供维护人员。
 
 ## 产品行为

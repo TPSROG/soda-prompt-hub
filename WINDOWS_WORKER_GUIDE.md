@@ -2,7 +2,7 @@
 
 这份旧路径继续保留，公开用户应阅读 [Windows Worker 完整指南](docs/WINDOWS_WORKER.md)。
 
-普通用户从[Mac + Windows Worker Release](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.0-mac-windows-20260913)
+普通用户从[Mac + Windows Worker Release](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.1-mac-windows-20260914)
 下载Worker Setup，安装后从开始菜单打开控制台，在设置中确认ComfyUI和共享任务目录。
 Windows单机应使用[Desktop](docs/QUICK_START.md#windows-单机第一次安装)，不另开这份独立Worker。
 

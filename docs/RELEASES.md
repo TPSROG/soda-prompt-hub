@@ -93,6 +93,11 @@ ZIP 内文件时间和权限使用固定值；同一提交、同一工具链重�
 不是把程序版本退回 `1.1.1rc1`。在 Windows 新安装、备份、文件管理器和两种运行模式完成手工验收前，
 不得设为 Latest。
 
+| 下载 | Git tag | 发布状态 |
+| --- | --- | --- |
+| [Mac + Windows Worker](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.1-mac-windows-20260914) | `v1.1.1-mac-windows-20260914` | Pre-release |
+| [Windows 单机](https://github.com/cOkieeman/soda-prompt-hub/releases/tag/v1.1.1-windows-standalone-20260914) | `v1.1.1-windows-standalone-20260914` | Pre-release |
+
 ### 2026-09-13：同版本桌面验收构建
 
 本轮经维护者明确决定保持软件 `1.1.0`，用独立构建标签区分两套附件：
