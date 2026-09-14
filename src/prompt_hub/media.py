@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import mimetypes
 import tomllib
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
@@ -13,6 +14,31 @@ _KISEGA_SOURCE_ID = "kisegaeningyou"
 _CLIO_SOURCE_ID = "clio-style-preview"
 _ANIMADEX_SOURCE_ID = "animadex"
 _THUMBNAIL_SIZE = (640, 640)
+
+# 项目自己产出的图片格式必须有确定的媒体类型。Python 内置的 MIME 表不含 webp,
+# mimetypes 只有读到系统 /etc/mime.types 里的映射才知道它; 在 Ubuntu 22.04 这类
+# 环境里没有该映射, Starlette 的 FileResponse 会退化成 application/octet-stream,
+# 浏览器就不再内联显示图片。
+_IMAGE_MEDIA_TYPES: dict[str, str] = {
+    ".avif": "image/avif",
+    ".bmp": "image/bmp",
+    ".gif": "image/gif",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".png": "image/png",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
+    ".webp": "image/webp",
+}
+
+
+def media_type_for(path: Path) -> str:
+    """Return a concrete media type for a file we serve ourselves."""
+    known = _IMAGE_MEDIA_TYPES.get(path.suffix.casefold())
+    if known is not None:
+        return known
+    guessed, _ = mimetypes.guess_type(path.name)
+    return guessed or "application/octet-stream"
 
 
 def build_kisega_thumbnails(settings: Settings) -> tuple[int, int]:

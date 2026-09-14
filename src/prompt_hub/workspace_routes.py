@@ -19,6 +19,7 @@ from prompt_hub.dataset_workspace import (
     DatasetWorkspaceStore,
 )
 from prompt_hub.local_model import caption_mode_contract
+from prompt_hub.media import media_type_for
 from prompt_hub.remote_nodes import RemoteNodeError, RemoteNodeStore
 
 if TYPE_CHECKING:
@@ -671,7 +672,7 @@ def create_workspace_router(
         path = workspace_store.resolve_source_image(workspace_id, relative_path)
         if path is None:
             raise HTTPException(status_code=404, detail="Dataset image not found")
-        return FileResponse(path)
+        return FileResponse(path, media_type=media_type_for(path))
 
     @router.post(
         "/api/dataset-workspaces/{workspace_id}/rescan",
