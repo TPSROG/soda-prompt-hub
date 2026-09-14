@@ -348,7 +348,9 @@ Soda Prompt Hub Linux 适配审计报告（第一阶段交付物）。
 ## 12. CI 首轮实测发现并已修复的缺陷（2026-09-14）
 
 静态审计只能回答“能不能跑”，下面的问题只有在真实 Ubuntu 上跑完整套件才会暴露。
-两项都已在本分支修复，并各自补了回归测试；修复同时作为上游 PR 草稿记录在 `docs/linux/README.md`。
+两项都已在本分支修复并各自补了回归测试，另外各自作为一个独立提交提给上游
+（[#20](https://github.com/cOkieeman/soda-prompt-hub/pull/20)、
+[#21](https://github.com/cOkieeman/soda-prompt-hub/pull/21)，均不含任何 Linux 部署内容）。
 
 ### 12.1 WebP 媒体类型依赖系统 MIME 数据库（真实缺陷，已修复）
 

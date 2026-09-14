@@ -265,6 +265,6 @@ docs(linux): add Linux installation guide
 | --- | --- |
 | 默认分支 | `schedule` / `workflow_run` / `workflow_dispatch` 都要求工作流存在于**默认分支**；实测 `upstream-sync.yml`、`release-linux.yml` 返回 404（not found on the default branch）。需要把仓库默认分支设为 `linux/main`（或把 Linux 线合进 `main`）才能启用每日检查与自动发布 |
 | §28 上游更新验收 | 依赖上一条；启用后模拟一次上游提交即可验收 |
-| 上游 PR | 两个修复（WebP 媒体类型、心跳用例时间戳）的标题与正文已备在 `docs/linux/README.md`，等待决定是否提交 |
+| 上游 PR | ✅ 已提交：[#20](https://github.com/cOkieeman/soda-prompt-hub/pull/20)（WebP 媒体类型）与 [#21](https://github.com/cOkieeman/soda-prompt-hub/pull/21)（心跳用例时间戳），均从 `upstream/main` 拉出、各自只有一个提交、不含 Linux 部署内容；等待上游审核 |
 | G1 / G2 / F1 / F2 | `usage_mode` 的 `linux_local` 语义、SMB 配对限制、数据集浏览的外接卷与快捷入口；可沿用“先修 + 反哺上游”的既有轨道 |
 | Phase 10 | 干净 Ubuntu 上的完整验收已在 WSL2 与 GitHub runner 完成；如需真实 VPS，可在启用默认分支后重跑 |
