@@ -47,7 +47,7 @@
 | D6 | **默认只监听 `127.0.0.1`** | 主任务书 §25；非本机地址需显式传参并打印警告 |
 | D7 | **`loginctl enable-linger` 只作为可选参数** | 主任务书 §7；实测 WSL 下 `Linger=no` |
 | D8 | **不重复实现上游已有能力** | 审计 A6/A7（`xdg-open` 分支、`shutil.which("git")` 均已存在） |
-| D9 | **Linux CI 不复制上游 ubuntu 作业** | 上游 `ci.yml` 已在 `ubuntu-latest` 跑全量测试（审计 A1） |
+| D9 | **Linux CI 不引入新工具，但按 §13 执行项目既有的格式 / lint / 类型检查命令** | 主任务书 §13；命令与上游 `ci.yml` 完全一致，新增价值在 22.04/24.04 矩阵与部署冒烟 |
 | D10 | **上游同步不直接 merge 到生产分支** | 主任务书 §16：同步分支 → CI → 成功开 PR / 失败开 Issue |
 | D11 | **G1（usage mode）走上游 PR，不在本地长期携带** | 涉及 `web.py`/`desktop_connection.py` 等核心文件（审计 G1） |
 
@@ -229,9 +229,10 @@ docs(linux): add Linux installation guide
 
 `.github/workflows/linux.yml`：
 
+- `lint` 作业：按主任务书 §13 执行项目**既有**的检查命令 —— `uv run ruff format --check .`、`uv run ruff check .`、`uv run ty check src/`（不引入任何新工具）。
 - `tests` 作业：`ubuntu-22.04` 与 `ubuntu-24.04` 矩阵，装 Node（测试套件的隐性依赖），`uv sync --locked` → 完整 `pytest` → **部署冒烟**（`install.sh --no-service` → `start.sh` → `/api/health` → `status.sh` → `stop.sh`）。
 - `systemd-user-service` 作业：在 runner 具备用户级 systemd 时执行真实安装、`systemctl --user status`、健康检查、`uninstall.sh`，并断言卸载后用户数据仍在。
-- 刻意**不重复**上游 `ci.yml` 已做的 ruff / ty / build。
+- 这些命令与上游 `ci.yml` 相同，使 Linux 工作流可独立作为发布前的质量闸门；新增价值在 22.04/24.04 矩阵与部署冒烟。
 
 ### Phase 7｜上游同步 — ✅ 工作流就绪
 
