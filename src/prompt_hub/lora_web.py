@@ -16,10 +16,11 @@ LORA_STYLES = r"""
   .lora-main { display: grid; gap: 18px; align-content: start; }
   .lora-form { display: grid; gap: 12px; }
   .lora-form label, .lora-fieldset { display: grid; gap: 6px; color: #55564f; font: 700 10px/1.3 monospace; letter-spacing: .04em; }
-  .lora-form input, .lora-form select, .lora-form textarea { width: 100%; border: 1px solid var(--line); background: #f7f2e7; padding: 10px; color: var(--ink); }
+  .lora-form input:not([type="checkbox"]):not([type="radio"]), .lora-form select, .lora-form textarea { width: 100%; border: 1px solid var(--line); background: #f7f2e7; padding: 10px; color: var(--ink); }
   .lora-form textarea { min-height: 72px; resize: vertical; }
   .lora-checks { display: flex; flex-wrap: wrap; gap: 8px; }
   .lora-checks label { display: inline-flex; grid-template-columns: auto 1fr; align-items: center; gap: 6px; padding: 8px; border: 1px solid var(--line); background: #e3ddce; cursor: pointer; }
+  .lora-checks input[type="checkbox"] { width: 16px; height: 16px; flex: 0 0 16px; margin: 0; padding: 0; accent-color: var(--signal); }
   .lora-format-help { margin: 0; color: var(--muted); font: 9px/1.55 monospace; }
   .lora-delivery-readiness { display: grid; gap: 9px; margin: 12px 0; }
   .lora-delivery-format { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; align-items: center; padding: 12px; border: 1px solid var(--line); background: #f4efe3; }

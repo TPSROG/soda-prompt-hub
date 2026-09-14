@@ -344,7 +344,11 @@
     creativeState.project = await creativeJson('/api/creative/projects/' + encodeURIComponent(creativeState.project.project_id), {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(collectCreative())});
     const index = creativeState.projects.findIndex(p => p.project_id === creativeState.project.project_id);
     if (index >= 0) creativeState.projects[index] = creativeState.project; else creativeState.projects.unshift(creativeState.project);
-    renderCreativeProjects(); $('#creativeSaveState').textContent = `已保存 · R${creativeState.project.revision}`; await Promise.all([loadIterationContext(),refreshProjectJourney()]);
+    renderCreativeProjects();
+    const saveState = $('#creativeSaveState');
+    saveState.textContent = `已保存 · R${creativeState.project.revision}`;
+    window.playPromptHubStatusPulse?.(saveState);
+    await Promise.all([loadIterationContext(),refreshProjectJourney()]);
   }
 
   async function sendWorkflowProfile() {

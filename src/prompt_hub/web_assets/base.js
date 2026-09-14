@@ -437,6 +437,84 @@
       if (characterMode) await runSearch();
     }
 
+    const VIEW_MOTION_SELECTORS = {
+      home: '#homePage .home-lead',
+      creative: '#creativePage .creative-heading',
+      discover: '#discoveryPage .discovery-hero',
+      datasets: '#workspacePage .dataset-heading',
+      lora: '#loraPage .lora-hero',
+      comfy: '#comfyPage .comfy-hero',
+      management: '#managementPage .management-sources',
+      prompts: '#archiveWorkspace .archive-header',
+      characters: '#archiveWorkspace .archive-header',
+    };
+    let activeViewMotion = null;
+
+    function restartCssMotion(element, className) {
+      let secondFrame = 0;
+      element.classList.remove(className);
+      const firstFrame = window.requestAnimationFrame(() => {
+        secondFrame = window.requestAnimationFrame(() => {
+          element.classList.add(className);
+          element.addEventListener('animationend', () => element.classList.remove(className), {once: true});
+        });
+      });
+      return {
+        cancel() {
+          window.cancelAnimationFrame(firstFrame);
+          if (secondFrame) window.cancelAnimationFrame(secondFrame);
+          element.classList.remove(className);
+        },
+      };
+    }
+
+    function prefersReducedMotion() {
+      return Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+    }
+
+    function viewMotionTarget(view) {
+      if (view === 'remote') {
+        const usageMode = document.documentElement.dataset.usageMode || 'mac_remote';
+        return document.querySelector(`#remotePage .remote-hero[data-usage-only="${usageMode}"]`);
+      }
+      const selector = VIEW_MOTION_SELECTORS[view];
+      return selector ? document.querySelector(selector) : null;
+    }
+
+    function playViewEnter(view) {
+      if (prefersReducedMotion()) return;
+      const target = viewMotionTarget(view);
+      if (!target) return;
+      activeViewMotion?.cancel();
+      if (target.animate) {
+        activeViewMotion = target.animate(
+          [
+            {opacity: .72, transform: 'translateY(4px)'},
+            {opacity: 1, transform: 'translateY(0)'},
+          ],
+          {duration: 180, easing: 'cubic-bezier(.2, .75, .2, 1)'},
+        );
+        return;
+      }
+      activeViewMotion = restartCssMotion(target, 'prompt-hub-view-enter');
+    }
+
+    function playPromptHubStatusPulse(element) {
+      if (prefersReducedMotion() || !element) return;
+      if (!element.animate) {
+        restartCssMotion(element, 'prompt-hub-status-pulse');
+        return;
+      }
+      element.animate(
+        [
+          {opacity: .68, transform: 'translateY(1px)'},
+          {opacity: 1, transform: 'translateY(0)'},
+        ],
+        {duration: 180, easing: 'cubic-bezier(.2, .75, .2, 1)'},
+      );
+    }
+    window.playPromptHubStatusPulse = playPromptHubStatusPulse;
+
     async function setView(view) {
       setNavMenu(false);
       $('#appNavCurrent').textContent = `当前：${viewLabels[view] || '首页'}`;
@@ -450,6 +528,8 @@
       $('#remotePage').hidden = view !== 'remote';
       $('#managementPage').hidden = view !== 'management';
       $('#archiveWorkspace').hidden = !archiveMode;
+      window.scrollTo({top: 0, behavior: 'auto'});
+      playViewEnter(view);
       document.querySelectorAll('[data-view]').forEach(button => {
         if (button.classList.contains('app-nav-button')) {
           button.setAttribute('aria-current', button.dataset.view === view ? 'page' : 'false');
@@ -482,7 +562,6 @@
       } else {
         currentMode = view;
       }
-      window.scrollTo({top: 0, behavior: 'smooth'});
     }
     window.setPromptHubView = setView;
 
