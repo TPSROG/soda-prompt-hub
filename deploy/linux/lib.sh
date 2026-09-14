@@ -57,6 +57,22 @@ sph_launcher_path() {
     printf '%s/.local/bin/soda-prompt-hub' "${HOME}"
 }
 
+sph_worker_launcher_path() {
+    printf '%s/.local/bin/soda-worker' "${HOME}"
+}
+
+sph_worker_config_path() {
+    printf '%s/worker-config.json' "$(sph_data_home)"
+}
+
+sph_worker_share_root() {
+    printf '%s/worker-share' "$(sph_data_home)"
+}
+
+sph_worker_unit_path() {
+    printf '%s/systemd/user/soda-worker.service' "${XDG_CONFIG_HOME:-${HOME}/.config}"
+}
+
 sph_runtime_dir() {
     printf '%s' "${XDG_RUNTIME_DIR:-/tmp}"
 }

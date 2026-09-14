@@ -15,6 +15,7 @@
 #   --models-root <路径>   模型根目录（默认 <资料库父目录>/models）
 #   --no-service           只准备依赖与目录，不安装 systemd 服务
 #   --enable-linger        额外执行 loginctl enable-linger（默认不做，见 README）
+#   --with-worker          额外准备 Linux Compute Worker（配置模板、命令、systemd 单元）
 #   --force                已存在安装记录时，允许覆盖（不会删除数据）
 #   -h, --help             显示本帮助
 
@@ -26,7 +27,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib.sh"
 
 usage() {
-    sed -n '3,19p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '3,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 HOST="${SPH_DEFAULT_HOST}"
@@ -35,6 +36,7 @@ LIBRARY_ROOT=""
 MODELS_ROOT=""
 INSTALL_SERVICE=1
 ENABLE_LINGER=0
+WITH_WORKER=0
 FORCE=0
 
 while (($# > 0)); do
@@ -61,6 +63,10 @@ while (($# > 0)); do
             ;;
         --enable-linger)
             ENABLE_LINGER=1
+            shift
+            ;;
+        --with-worker)
+            WITH_WORKER=1
             shift
             ;;
         --force)
@@ -220,7 +226,52 @@ else
     sph_info "  ${REPO_ROOT}/.venv/bin/prompt-hub serve --host ${HOST} --port ${PORT}"
 fi
 
-# ---------------------------------------------------------------- 7. 安装记录
+# ---------------------------------------------------------------- 7. Compute Worker（可选）
+if [[ "${WITH_WORKER}" -eq 1 ]]; then
+    printf -- '\n--- Compute Worker ---\n'
+    WORKER_SHARE="$(sph_worker_share_root)"
+    WORKER_BRIDGE="${WORKER_SHARE}/prompt-hub"
+    WORKER_CONFIG="$(sph_worker_config_path)"
+    for name in outbox inbox processing completed failed packages; do
+        mkdir -p "${WORKER_BRIDGE}/${name}"
+    done
+    sph_ok "桥接目录: ${WORKER_BRIDGE}"
+
+    if [[ -f "${WORKER_CONFIG}" ]]; then
+        sph_info "已存在配置，保持不动: ${WORKER_CONFIG}"
+    else
+        TEMPLATE="${SCRIPT_DIR}/worker-config.example.json"
+        [[ -f "${TEMPLATE}" ]] || sph_die "缺少 Worker 配置模板：${TEMPLATE}"
+        WORKER_JSON="$(cat "${TEMPLATE}")"
+        WORKER_JSON="${WORKER_JSON//__SPH_WORKER_BRIDGE_ROOT__/${WORKER_BRIDGE}}"
+        printf '%s\n' "${WORKER_JSON}" >"${WORKER_CONFIG}"
+        chmod 0644 "${WORKER_CONFIG}"
+        sph_ok "已生成配置: ${WORKER_CONFIG}"
+        sph_warn "请先把 comfyui_url 改成你的 ComfyUI 地址，再启用 Worker"
+    fi
+
+    WORKER_LAUNCHER="$(sph_worker_launcher_path)"
+    install -m 0755 "${SCRIPT_DIR}/soda-worker.sh" "${WORKER_LAUNCHER}"
+    sph_ok "已安装命令: ${WORKER_LAUNCHER}"
+
+    if [[ "${INSTALL_SERVICE}" -eq 1 ]]; then
+        WORKER_UNIT="$(sph_worker_unit_path)"
+        WORKER_TEMPLATE="${SCRIPT_DIR}/soda-worker.service"
+        [[ -f "${WORKER_TEMPLATE}" ]] || sph_die "缺少 Worker 服务模板：${WORKER_TEMPLATE}"
+        WORKER_UNIT_CONTENT="$(cat "${WORKER_TEMPLATE}")"
+        WORKER_UNIT_CONTENT="${WORKER_UNIT_CONTENT//__SPH_REPO__/${REPO_ROOT}}"
+        WORKER_UNIT_CONTENT="${WORKER_UNIT_CONTENT//__SPH_WORKER_CONFIG__/${WORKER_CONFIG}}"
+        printf '%s\n' "${WORKER_UNIT_CONTENT}" >"${WORKER_UNIT}"
+        chmod 0644 "${WORKER_UNIT}"
+        sph_systemd_daemon_reload
+        sph_ok "已写入 ${WORKER_UNIT}（默认不启用）"
+        sph_info "改好 comfyui_url 后运行：systemctl --user enable --now soda-worker"
+    fi
+
+    sph_info "自检：${WORKER_LAUNCHER} self-test"
+fi
+
+# ---------------------------------------------------------------- 8. 安装记录
 ENV_FILE="$(sph_install_env_path)"
 mkdir -p "$(dirname -- "${ENV_FILE}")"
 {
@@ -235,7 +286,7 @@ mkdir -p "$(dirname -- "${ENV_FILE}")"
 } >"${ENV_FILE}"
 chmod 0644 "${ENV_FILE}"
 
-# ---------------------------------------------------------------- 8. 健康检查
+# ---------------------------------------------------------------- 9. 健康检查
 printf -- '\n--- 健康检查 ---\n'
 if [[ "${INSTALL_SERVICE}" -eq 1 ]]; then
     if sph_wait_health 30; then
@@ -256,6 +307,13 @@ printf '资料库: %s\n' "${LIBRARY_ROOT}"
 printf '模型:   %s\n' "${MODELS_ROOT}"
 printf '地址:   http://%s:%s\n' "${HOST}" "${PORT}"
 printf '记录:   %s\n' "${ENV_FILE}"
+if [[ "${WITH_WORKER}" -eq 1 ]]; then
+    printf '\nCompute Worker:\n'
+    printf '  配置: %s\n' "$(sph_worker_config_path)"
+    printf '  桥接: %s/prompt-hub\n' "$(sph_worker_share_root)"
+    printf '  命令: %s（self-test / once / start）\n' "$(sph_worker_launcher_path)"
+    printf '  服务: systemctl --user enable --now soda-worker（改好 comfyui_url 之后）\n'
+fi
 if [[ "${INSTALL_SERVICE}" -eq 1 ]]; then
     printf '\n常用命令:\n'
     printf '  systemctl --user status %s\n' "${SPH_SERVICE_NAME}"

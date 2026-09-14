@@ -76,6 +76,26 @@ else
     sph_info "没有 unit 文件需要移除"
 fi
 
+# ---------------------------------------------------------------- 1b. Compute Worker
+WORKER_UNIT="$(sph_worker_unit_path)"
+if sph_have_systemd_user && systemctl --user list-unit-files "soda-worker.service" >/dev/null 2>&1; then
+    systemctl --user stop "soda-worker.service" 2>/dev/null || true
+    systemctl --user disable "soda-worker.service" 2>/dev/null || true
+    sph_ok "Worker 服务已停止并禁用"
+fi
+if [[ -f "${WORKER_UNIT}" ]]; then
+    rm -f "${WORKER_UNIT}"
+    sph_ok "已移除 ${WORKER_UNIT}"
+    if sph_have_systemd_user; then
+        systemctl --user daemon-reload
+    fi
+fi
+WORKER_LAUNCHER="$(sph_worker_launcher_path)"
+if [[ -f "${WORKER_LAUNCHER}" ]]; then
+    rm -f "${WORKER_LAUNCHER}"
+    sph_ok "已移除 ${WORKER_LAUNCHER}"
+fi
+
 LAUNCHER="$(sph_launcher_path)"
 if [[ -f "${LAUNCHER}" ]]; then
     rm -f "${LAUNCHER}"
@@ -88,6 +108,7 @@ if ((PURGE == 0)); then
     sph_info "已保留用户数据（默认行为）："
     [[ -n "${LIBRARY_ROOT}" ]] && sph_info "  资料库: ${LIBRARY_ROOT}"
     [[ -n "${MODELS_ROOT}" ]] && sph_info "  模型:   ${MODELS_ROOT}"
+    sph_info "  Worker: $(sph_worker_config_path) 与 $(sph_worker_share_root)（桥接目录可能含任务与结果）"
     sph_info "如需一并删除，请加 --purge-data（会二次确认）"
 else
     if ((ASSUME_YES == 0)); then
@@ -116,6 +137,8 @@ else
     done
 
     rm -f "${ENV_FILE}"
+    rm -f "$(sph_worker_config_path)"
+    rm -rf -- "$(sph_worker_share_root)"
     rmdir "$(sph_data_home)" 2>/dev/null || true
     sph_ok "已移除安装记录"
 fi

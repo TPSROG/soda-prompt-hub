@@ -27,8 +27,9 @@ Linux 支持由社区适配分支提供，状态为 **Experimental**，不随官
 | --- | --- |
 | Core：资料库、创作、审核、数据集整理 | 支持 |
 | systemd 用户服务、安装 / 更新 / 卸载脚本 | 支持 |
-| Compute Worker（本机 ComfyUI 执行端） | 暂不支持 |
-| SMB 双机配对、LoRA 正式训练 | 暂不支持（仅 Windows） |
+| Compute Worker（ComfyUI 出图执行端） | **实验性支持**（`install.sh --with-worker`，见 [Linux Worker](docs/linux/WORKER.md)） |
+| SMB 双机配对 | 暂不支持（Linux 用本地桥接目录代替） |
+| LoRA 正式训练 | 暂不支持（仅 Windows） |
 
 分支做了什么、怎么用、怎么验证见[Linux 适配说明](docs/linux/README.md)；
 具体步骤见[安装](docs/linux/INSTALL.md)与[更新](docs/linux/UPDATE.md)。

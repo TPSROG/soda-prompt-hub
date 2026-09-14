@@ -15,6 +15,9 @@
 - 新增 `.github/workflows/upstream-sync.yml`：每日检查上游更新，自动建同步分支并开 PR；出现冲突时开 Issue，不直接合并。
 - 新增 `.github/workflows/release-linux.yml`：上游版本变化且 Linux CI 通过时产出 `tar.gz` 与 `SHA256SUMS`。
 - 新增 `scripts/linux/check-env.sh` 环境自检；Linux 文档见 `docs/linux/`。
+- 新增 Linux Compute Worker（实验性）：`install.sh --with-worker` 准备桥接目录、`soda-worker` 命令与
+  systemd 单元；Worker 从桥接目录领取任务、调用 ComfyUI HTTP API 出图并回传带 sha256 的结果。
+  协议层已在 Linux 上端到端验证（真 Worker + 真桥接 + 假 ComfyUI，无需 GPU）；LoRA 正式训练仍仅限 Windows。
 - 修复：`install.sh --no-service` 打印的直接运行命令此前漏掉 `PROMPT_HUB_MODELS_ROOT`。
 - 已知限制：Compute Worker（本机 ComfyUI 执行端）、SMB 双机配对与 LoRA 正式训练仍仅限 Windows。
 

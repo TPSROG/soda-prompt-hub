@@ -54,8 +54,8 @@ git switch linux/main
 | Core：资料库、检索、创作、审核、数据集整理 | **支持**（Ubuntu 24.04 实测；22.04 需本分支的媒体类型修复） |
 | systemd 用户服务、安装 / 更新 / 卸载脚本 | **支持** |
 | CLI（`prompt-hub` / `soda-prompt-hub`） | **支持** |
-| Compute Worker（本机 ComfyUI 执行端） | 暂不支持（Windows-only） |
-| SMB 双机配对 | 暂不支持（上游实现硬编码 macOS） |
+| Compute Worker（ComfyUI 出图执行端） | **实验性支持**：`install.sh --with-worker`，协议端到端已验证 → [WORKER.md](WORKER.md) |
+| SMB 双机配对 | 暂不支持；Linux 侧用本地桥接目录代替（无需 SMB） |
 | LoRA 正式训练 | 暂不支持（Windows-only） |
 | 桌面宿主（托盘 / 启动器 GUI） | 暂不支持，用 systemd + 浏览器代替 |
 | `.deb` / `.rpm` / AppImage / Snap / Flatpak | 暂不提供；第一阶段只出 `tar.gz` + `SHA256SUMS` |
@@ -163,6 +163,7 @@ CI：仓库 **Actions → Linux**，四个作业 —— `格式 / Lint / 类型�
 | [COMPATIBILITY_AUDIT.md](COMPATIBILITY_AUDIT.md) | 平台耦合审计（§10 实测、§11 复核、§12 CI 发现） |
 | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | 设计决策、阶段计划、验收证据与待办 |
 | [DEV_ENVIRONMENT.md](DEV_ENVIRONMENT.md) | WSL2 开发/测试环境的实际状态 |
+| [WORKER.md](WORKER.md) | Linux Compute Worker：安装、配置、桥接协议、验证结果与限制 |
 
 ## 许可与署名
 

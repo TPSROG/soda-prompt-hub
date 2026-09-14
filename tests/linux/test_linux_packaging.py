@@ -28,6 +28,7 @@ SHELL_SCRIPTS = (
     "stop.sh",
     "status.sh",
     "soda-prompt-hub.sh",
+    "soda-worker.sh",
 )
 
 # lib.sh 是被 source 的函数库, 本身不设置 shell 选项
@@ -47,9 +48,8 @@ def _text(name: str) -> str:
 
 
 def test_deploy_linux_layout_exists() -> None:
-    missing = [
-        name for name in (*SHELL_SCRIPTS, UNIT_TEMPLATE.name) if not (DEPLOY_LINUX / name).is_file()
-    ]
+    extra = ("soda-prompt-hub.service", "soda-worker.service", "worker-config.example.json")
+    missing = [name for name in (*SHELL_SCRIPTS, *extra) if not (DEPLOY_LINUX / name).is_file()]
     assert not missing, f"deploy/linux 缺少文件: {missing}"
 
 
@@ -194,6 +194,32 @@ def test_environment_checker_covers_required_signals() -> None:
         assert signal in checker
 
 
+def test_linux_worker_packaging_is_complete() -> None:
+    """Linux Compute Worker 的配置模板、便利命令与 systemd 单元都要齐备。"""
+    unit = _text("soda-worker.service")
+    assert "WorkingDirectory=__SPH_REPO__" in unit
+    assert "ExecStart=__SPH_REPO__/.venv/bin/python -m prompt_hub.windows_worker" in unit
+    assert "--config __SPH_WORKER_CONFIG__" in unit
+    assert "Restart=on-failure" in unit
+    assert "WantedBy=default.target" in unit
+    assert "User=root" not in unit
+
+    example = _text("worker-config.example.json")
+    assert "__SPH_WORKER_BRIDGE_ROOT__" in example
+    assert "comfyui_url" in example, "ComfyUI 地址必须可配置"
+    assert '"role"' in example
+
+    install = _text("install.sh")
+    assert "--with-worker" in install
+    assert "${WORKER_UNIT_CONTENT//__SPH_REPO__/" in install
+    assert "${WORKER_UNIT_CONTENT//__SPH_WORKER_CONFIG__/" in install
+    assert "${WORKER_JSON//__SPH_WORKER_BRIDGE_ROOT__/" in install
+
+    launcher = _text("soda-worker.sh")
+    assert "prompt_hub.windows_worker" in launcher
+    assert "self-test" in launcher
+
+
 def _workflow(name: str) -> str:
     return (REPO_ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
 
@@ -225,7 +251,8 @@ def test_upstream_sync_never_merges_into_the_maintenance_branch() -> None:
     workflow = _workflow("upstream-sync.yml")
     assert 'cron: "0 2 * * *"' in workflow, "应为每日一次检查"
     assert "merge --no-edit upstream/main" in workflow, "应在同步分支上尝试合并"
-    assert "gh pr create" in workflow, "合并成功应开 PR"
+    # 用 REST 建 PR: fork 里 GraphQL 的 createPullRequest 会被 GITHUB_TOKEN 拒绝
+    assert "/pulls" in workflow, "合并成功应通过 REST 开 PR"
     assert "gh issue create" in workflow, "冲突应开 Issue"
     assert "--force-with-lease origin" in workflow, "只应推送同步分支"
     assert "upstream-baseline.txt" in workflow, "应记录已同步的上游基线"
