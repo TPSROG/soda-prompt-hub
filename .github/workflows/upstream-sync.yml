@@ -152,6 +152,8 @@ jobs:
         run: |
           set -Eeuo pipefail
           branch="${{ steps.merge.outputs.branch }}"
+          base="${{ steps.merge.outputs.base }}"
+          compare_url="https://github.com/${GITHUB_REPOSITORY}/compare/${base}...${branch}?expand=1"
           if [[ -n "$(gh pr list --head "${branch}" --state open --json number --jq '.[].number')" ]]; then
             echo "已存在 ${branch} 的 PR，跳过"
             exit 0
@@ -163,11 +165,19 @@ jobs:
             echo
             echo "> 本 PR 只做上游同步，不含任何 Linux 适配改动。"
           } >pr-body.md
-          gh pr create \
-            --base "${{ steps.merge.outputs.base }}" \
-            --head "${branch}" \
-            --title "chore: sync upstream ${{ steps.summary.outputs.short }}" \
-            --body-file pr-body.md
+          {
+            echo "### 上游同步分支已就绪"
+            echo
+            echo "- 分支：\`${branch}\` → \`${base}\`"
+            echo "- 一键开 PR：${compare_url}"
+          } >>"${GITHUB_STEP_SUMMARY}"
+          # 用 REST 而不是 GraphQL：在 fork 仓库里 GITHUB_TOKEN 调 GraphQL 的 createPullRequest
+          # 会返回 "Resource not accessible by integration"，REST 的权限检查路径不同。
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/pulls" \
+            -f title="chore: sync upstream ${{ steps.summary.outputs.short }}" \
+            -f head="${branch}" \
+            -f base="${base}" \
+            -F body=@pr-body.md
 
       - name: 冲突时创建 Issue
         if: steps.merge.outputs.conflict == 'true'
