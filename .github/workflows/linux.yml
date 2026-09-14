@@ -1,11 +1,10 @@
 name: Linux
 
-# 上游 ci.yml 已经在 ubuntu-latest 上跑 ruff / ty / pytest / build，
-# 这里只补上游没有的东西：
-#   1) Ubuntu 22.04 与 24.04 两个 LTS 上的完整测试
-#   2) deploy/linux 部署脚本的实机冒烟
-#   3) systemd 用户服务路径（runner 支持时）
-# 不重复引用 lint / 类型检查工具，避免上游规则漂移带来的双份维护。
+# 本工作流是 Linux 侧的独立质量闸门：
+#   1) lint 作业：按主任务书 §13 执行项目**既有**的格式 / lint / 类型检查命令
+#      （不引入任何新工具；上游 ci.yml 在 ubuntu-latest 上也跑同样的命令）
+#   2) tests 作业：Ubuntu 22.04 与 24.04 上的完整测试 + deploy/linux 部署冒烟
+#   3) systemd 用户服务作业：runner 支持时执行真实安装 / 状态 / 健康检查 / 卸载
 
 on:
   push:
@@ -21,6 +20,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lint:
+    name: 格式 / Lint / 类型检查
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Check formatting
+        run: uv run ruff format --check .
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Type check
+        run: uv run ty check src/
+
   tests:
     name: Tests on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
