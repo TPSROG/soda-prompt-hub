@@ -5,6 +5,27 @@
 
 ## [未发布]
 
+### Linux 支持（实验性，非官方构建）
+
+- 新增 `deploy/linux/`：安装、卸载、更新、启停、状态脚本与 systemd **用户**服务。
+  不需要 `sudo`，服务以当前用户运行，默认只监听 `127.0.0.1:8765`。
+- 新增 `soda-prompt-hub` 便利命令：`start` / `stop` / `restart` / `status` / `logs` / `serve` / `update` / `version`。
+- 新增 `tests/linux/`：部署层静态契约测试，以及使用隔离 `HOME` / XDG 路径的 Linux 行为测试。
+- 新增 `.github/workflows/linux.yml`：Ubuntu 22.04 与 24.04 完整测试、部署冒烟、systemd 用户服务验收。
+- 固定维护分支使用 `linux/main`；上游同步与发行暂由维护者手动执行，不在非默认分支放置无法触发的
+  `schedule` / `workflow_run` 工作流。
+- 新增 `scripts/linux/check-env.sh` 环境自检；Linux 文档见 `docs/linux/`。
+- 新增 Linux Compute Worker（实验性）：`install.sh --with-worker` 准备桥接目录、`soda-worker` 命令与
+  systemd 单元；Worker 从桥接目录领取任务、调用 ComfyUI HTTP API 出图并回传带 sha256 的结果。
+  协议层已在 Linux 上端到端验证（真 Worker + 真桥接 + 假 ComfyUI，无需 GPU）；LoRA 正式训练仍仅限 Windows。
+- 修复：`install.sh --no-service` 打印的直接运行命令此前漏掉 `PROMPT_HUB_MODELS_ROOT`。
+- 新增 Linux 本机使用模式（`linux_local`）：Core 与 Compute Worker 在同一台机器上通过本地桥接目录协作，
+  界面文案、示例路径与配对入口按平台区分；`install.sh --with-worker` 会登记本机计算节点，设备页直接可用。
+- ComfyUI 地址不再限制为本机：支持 `http(s)` 任意主机，并支持 `https://用户名:密码@主机` 形式的 HTTP Basic 认证。
+- Linux 部署安全加固：卸载前解析真实路径，systemd unit 支持空格和 `%` 路径，Worker 配置仅当前用户可读，
+  更新时同步刷新 Core / Worker unit 并重启正在运行的 Worker。
+- 已知限制：LoRA 正式训练仍仅限 Windows；SMB 双机配对在 Linux 上用本地桥接目录代替。
+
 ### 1.1.1 预发布修复
 
 - Windows 数据集交付“打开所在文件夹”改用 `explorer.exe`；macOS 与 Linux 使用各自文件管理器，并把启动失败转为可读错误。

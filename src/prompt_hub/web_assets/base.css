@@ -1,9 +1,18 @@
+    /* windows_local 与 linux_local 都属于本机模式：只隐藏另一种模式的区块。 */
     html[data-usage-mode="windows_local"] [data-usage-only="mac_remote"],
+    html[data-usage-mode="windows_local"] [data-usage-only="linux_local"],
+    html[data-usage-mode="linux_local"] [data-usage-only="mac_remote"],
+    html[data-usage-mode="linux_local"] [data-usage-only="windows_local"],
     html[data-usage-mode="mac_remote"] [data-usage-only="windows_local"],
+    html[data-usage-mode="mac_remote"] [data-usage-only="linux_local"],
     html[data-usage-mode="windows_local"] #pairingEntry,
     html[data-usage-mode="windows_local"] #pairingDialog,
+    html[data-usage-mode="linux_local"] #pairingEntry,
+    html[data-usage-mode="linux_local"] #pairingDialog,
     html[data-usage-mode="windows_local"] #remoteNodeGrid .remote-form,
-    html[data-usage-mode="windows_local"] #remoteNodeGrid .remote-actions { display: none !important; }
+    html[data-usage-mode="windows_local"] #remoteNodeGrid .remote-actions,
+    html[data-usage-mode="linux_local"] #remoteNodeGrid .remote-form,
+    html[data-usage-mode="linux_local"] #remoteNodeGrid .remote-actions { display: none !important; }
     :root {
       --ink: #171815;
       --paper: #ece8dc;

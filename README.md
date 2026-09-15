@@ -19,6 +19,21 @@ Mac 包面向 Apple Silicon（arm64），Windows 包面向 x64。下载 Release 
 不是 GitHub 自动生成的 Source code ZIP。每套附有 `SHA256SUMS` 和手动验收说明。
 Windows 单机**不需要另开独立 Worker，也不需要 SMB 配对**。两套请分开测试，避免同时运行时混淆任务。
 
+### Linux（实验性，非官方构建）
+
+Linux 支持由社区适配分支提供，状态为 **Experimental**，不随官方 DMG / Setup 发布：
+
+| 能力 | Linux 状态 |
+| --- | --- |
+| Core：资料库、创作、审核、数据集整理 | 支持 |
+| systemd 用户服务、安装 / 更新 / 卸载脚本 | 支持 |
+| Compute Worker（ComfyUI 出图执行端） | **实验性支持**（`install.sh --with-worker`，见 [Linux Worker](docs/linux/WORKER.md)） |
+| SMB 双机配对 | 暂不支持（Linux 用本地桥接目录代替） |
+| LoRA 正式训练 | 暂不支持（仅 Windows） |
+
+分支做了什么、怎么用、怎么验证见[Linux 适配说明](docs/linux/README.md)；
+具体步骤见[安装](docs/linux/INSTALL.md)与[更新](docs/linux/UPDATE.md)。
+
 ## 五分钟开始
 
 1. 按上表下载，核对校验和，备份已有资料并正常退出旧服务，再安装对应应用。
@@ -35,6 +50,7 @@ Windows 单机**不需要另开独立 Worker，也不需要 SMB 配对**。两�
 | --- | --- |
 | Mac | `~/Documents/Soda Prompt Hub/prompt-library` |
 | Windows 单机 | `%USERPROFILE%\Documents\Soda Prompt Hub\prompt-library` |
+| Linux | `~/.local/share/soda-prompt-hub/library`（由 `PROMPT_HUB_LIBRARY_ROOT` 决定） |
 
 程序和个人资料彼此独立。重新安装或更新程序不会主动移动、删除提示词、图片、数据库或模型。
 
