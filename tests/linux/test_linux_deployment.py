@@ -157,6 +157,85 @@ def test_install_start_stop_cycle_keeps_program_and_data_separate(
     # 程序与用户数据分离: 数据由安装参数决定, 便利命令装进隔离的 HOME
     assert (library / "database" / "prompt-library.sqlite").is_file()
     assert (Path(isolated["HOME"]) / ".local" / "bin" / "soda-prompt-hub").is_file()
+    desktop_entry = Path(isolated["XDG_DATA_HOME"]) / "applications" / "soda-prompt-hub.desktop"
+    desktop_icon = (
+        Path(isolated["XDG_DATA_HOME"])
+        / "icons"
+        / "hicolor"
+        / "256x256"
+        / "apps"
+        / "soda-prompt-hub.png"
+    )
+    assert desktop_entry.is_file()
+    assert desktop_icon.is_file()
+
+
+def test_launcher_starts_opens_and_then_reuses_service(
+    tmp_path: Path, isolated: dict[str, str]
+) -> None:
+    library = tmp_path / "launcher library"
+    port = _free_port()
+    install = _install_no_service(isolated, port, library)
+    assert install.returncode == 0, install.stdout + install.stderr
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    capture = tmp_path / "opened-url.txt"
+    opener = fake_bin / "xdg-open"
+    opener.write_text(
+        '#!/bin/sh\nprintf "%s\\n" "$1" > "$PROMPT_HUB_LAUNCHER_CAPTURE"\n',
+        encoding="utf-8",
+    )
+    opener.chmod(0o755)
+    launch_env = {
+        **isolated,
+        "PATH": f"{fake_bin}{os.pathsep}{isolated['PATH']}",
+        "PROMPT_HUB_LAUNCHER_CAPTURE": str(capture),
+    }
+    try:
+        launch = _run("launch.sh", env=launch_env)
+        assert launch.returncode == 0, launch.stdout + launch.stderr
+        assert capture.read_text(encoding="utf-8").strip() == f"http://127.0.0.1:{port}"
+        log = Path(isolated["XDG_DATA_HOME"]) / "soda-prompt-hub" / "logs" / "launcher.log"
+        assert log.is_file()
+        assert "服务未就绪\uff0c开始启动" in log.read_text(encoding="utf-8")
+
+        reuse_env = {**isolated, "PROMPT_HUB_LAUNCHER_SKIP_OPEN": "1"}
+        reuse = _run("launch.sh", env=reuse_env)
+        assert reuse.returncode == 0, reuse.stdout + reuse.stderr
+        assert f"http://127.0.0.1:{port}" in reuse.stdout
+        assert "复用已运行的服务" in log.read_text(encoding="utf-8")
+    finally:
+        _run("stop.sh", env=isolated)
+
+
+def test_uninstall_removes_desktop_integration_but_keeps_data(
+    tmp_path: Path, isolated: dict[str, str]
+) -> None:
+    library = tmp_path / "library kept after uninstall"
+    port = _free_port()
+    install = _install_no_service(isolated, port, library)
+    assert install.returncode == 0, install.stdout + install.stderr
+
+    launcher = Path(isolated["HOME"]) / ".local" / "bin" / "soda-prompt-hub"
+    entry = Path(isolated["XDG_DATA_HOME"]) / "applications" / "soda-prompt-hub.desktop"
+    icon = (
+        Path(isolated["XDG_DATA_HOME"])
+        / "icons"
+        / "hicolor"
+        / "256x256"
+        / "apps"
+        / "soda-prompt-hub.png"
+    )
+    assert launcher.is_file()
+    assert entry.is_file()
+    assert icon.is_file()
+
+    uninstall = _run("uninstall.sh", env=isolated)
+    assert uninstall.returncode == 0, uninstall.stdout + uninstall.stderr
+    assert not launcher.exists()
+    assert not entry.exists()
+    assert not icon.exists()
+    assert library.is_dir(), "默认卸载不应删除资料库"
 
 
 def test_chinese_and_utf8_library_root(tmp_path: Path, isolated: dict[str, str]) -> None:

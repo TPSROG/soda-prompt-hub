@@ -10,6 +10,9 @@
 - 新增 `deploy/linux/`：安装、卸载、更新、启停、状态脚本与 systemd **用户**服务。
   不需要 `sudo`，服务以当前用户运行，默认只监听 `127.0.0.1:8765`。
 - 新增 `soda-prompt-hub` 便利命令：`start` / `stop` / `restart` / `status` / `logs` / `serve` / `update` / `version`。
+- 新增 Linux 轻量桌面启动器：安装用户级应用菜单入口与图标，点击后启动或复用 Core、等待健康检查，
+  再通过默认浏览器打开工作台；`soda-prompt-hub open` 提供相同行为。
+- 新增 `scripts/build_linux_release.py`：生成固定时间戳、规范权限、带 manifest 与 SHA-256 的可复现源码 tar.gz。
 - 新增 `tests/linux/`：部署层静态契约测试，以及使用隔离 `HOME` / XDG 路径的 Linux 行为测试。
 - 新增 `.github/workflows/linux.yml`：Ubuntu 22.04 与 24.04 完整测试、部署冒烟、systemd 用户服务验收。
 - 固定维护分支使用 `linux/main`；上游同步与发行暂由维护者手动执行，不在非默认分支放置无法触发的

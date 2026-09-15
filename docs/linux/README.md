@@ -32,6 +32,9 @@ git switch linux/main
 
 然后打开 <http://127.0.0.1:8765>。
 
+安装完成后也可以直接从应用菜单点击 **Soda Prompt Hub**。启动器会复用正在运行的 Core，或先启动
+Core 并等待健康检查通过，再用默认浏览器打开工作台。无桌面会话的服务器与 WSL 继续使用 CLI。
+
 安装脚本会检查环境、创建用户数据目录、执行 `uv sync --locked`、安装 systemd **用户**服务并做健康检查；
 不需要 `sudo`，也不会删除任何用户数据。参数、目录布局与排错见 [安装指南](INSTALL.md)，
 更新与回滚见 [更新指南](UPDATE.md)。
@@ -54,11 +57,12 @@ git switch linux/main
 | Core：资料库、检索、创作、审核、数据集整理 | **支持**（Ubuntu 24.04 实测；22.04 需本分支的媒体类型修复） |
 | systemd 用户服务、安装 / 更新 / 卸载脚本 | **支持** |
 | CLI（`prompt-hub` / `soda-prompt-hub`） | **支持** |
+| 应用菜单启动器 | **支持**：Desktop Entry + 用户级图标；浏览器 UI |
 | Compute Worker（ComfyUI 出图执行端） | **实验性支持**：`install.sh --with-worker`，已用真实 ComfyUI 出图验证 → [WORKER.md](WORKER.md) |
 | 远端 / 带认证的 ComfyUI | **支持**：`comfyui_url` 可用 `http(s)://用户名:密码@主机` |
 | SMB 双机配对 | 暂不支持；Linux 侧用本地桥接目录代替（无需 SMB） |
 | LoRA 正式训练 | 暂不支持（Windows-only） |
-| 桌面宿主（托盘 / 启动器 GUI） | 暂不支持，用 systemd + 浏览器代替 |
+| 嵌入式桌面宿主 / 托盘 | 暂不支持；轻量启动器使用 systemd + 默认浏览器 |
 | `.deb` / `.rpm` / AppImage / Snap / Flatpak | 暂不提供；第一阶段只出 `tar.gz` + `SHA256SUMS` |
 
 整体按 **Experimental** 对待：核心与部署链路已实测，但不承诺与官方安装包相同的验收强度。

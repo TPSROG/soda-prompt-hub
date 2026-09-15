@@ -3,6 +3,7 @@
 # Soda Prompt Hub — 便利命令（由 install.sh 安装到 ~/.local/bin/soda-prompt-hub）
 #
 # 用法:
+#   soda-prompt-hub open            启动服务并在默认浏览器打开
 #   soda-prompt-hub status          查看服务与资料库状态
 #   soda-prompt-hub start|stop|restart
 #   soda-prompt-hub logs            跟踪 systemd 用户日志
@@ -29,7 +30,7 @@ REPO="${SPH_REPO:?install.env 缺少 SPH_REPO}"
 [[ -d "${REPO}" ]] || die "安装记录指向的目录不存在：${REPO}"
 
 usage() {
-    sed -n '3,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '3,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 run_deploy() {
@@ -40,6 +41,10 @@ run_deploy() {
 }
 
 case "${1:-}" in
+    open)
+        shift
+        run_deploy launch.sh "$@"
+        ;;
     status)
         shift
         run_deploy status.sh "$@"

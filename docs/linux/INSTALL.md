@@ -66,6 +66,15 @@ cd soda-prompt-hub
 
 发行包内已包含 `deploy/`、`scripts/`、`docs/` 与程序本体，安装方式与源码一致。
 
+维护者可从已通过 CI 的 `linux/main` 构建可复现的源码包：
+
+```bash
+uv run python scripts/build_linux_release.py \
+  --output-dir dist/linux \
+  --architecture x86_64 \
+  --build-date "$(date -u +%Y%m%d)"
+```
+
 ## 安装位置
 
 | 内容 | 路径 |
@@ -76,6 +85,8 @@ cd soda-prompt-hub
 | 安装记录 | `~/.local/share/soda-prompt-hub/install.env` |
 | systemd 服务 | `~/.config/systemd/user/soda-prompt-hub.service` |
 | 便利命令 | `~/.local/bin/soda-prompt-hub` |
+| 应用菜单入口 | `$XDG_DATA_HOME/applications/soda-prompt-hub.desktop` |
+| 应用图标 | `$XDG_DATA_HOME/icons/hicolor/256x256/apps/soda-prompt-hub.png` |
 
 程序与用户数据完全分离：重新安装或更新程序不会移动、删除提示词、图片、数据库或模型。
 
@@ -85,9 +96,12 @@ cd soda-prompt-hub
 systemctl --user status soda-prompt-hub
 curl http://127.0.0.1:8765/api/health
 soda-prompt-hub status
+soda-prompt-hub open
 ```
 
-浏览器打开 <http://127.0.0.1:8765>。
+也可以从应用菜单点击 **Soda Prompt Hub**。轻量启动器会在服务就绪后打开
+<http://127.0.0.1:8765>；启动日志保存在
+`$XDG_DATA_HOME/soda-prompt-hub/logs/launcher.log`。
 
 ## 日常使用
 
