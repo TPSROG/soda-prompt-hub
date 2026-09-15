@@ -26,6 +26,8 @@ concurrency:
 
 env:
   UPSTREAM_REPO: cOkieeman/soda-prompt-hub
+  # 跟随上游的哪条分支；上游建了 linux/main 专门承载 Linux 线，缺失时自动回退 main
+  UPSTREAM_BRANCH: ${{ vars.UPSTREAM_BRANCH || 'linux/main' }}
   # 同步分支从哪个分支拉出；可用仓库变量覆盖
   SYNC_BASE_BRANCH: ${{ vars.SYNC_BASE_BRANCH || 'linux/main' }}
 
@@ -43,18 +45,28 @@ jobs:
         run: |
           set -Eeuo pipefail
           git remote add upstream "https://github.com/${UPSTREAM_REPO}.git" 2>/dev/null || true
-          git fetch --no-tags upstream main
+          branch="${UPSTREAM_BRANCH}"
+          if ! git ls-remote --exit-code --heads upstream "${branch}" >/dev/null 2>&1; then
+            echo "::warning::上游没有 ${branch} 分支，回退到 main"
+            branch="main"
+          fi
+          git fetch --no-tags upstream "${branch}"
+          {
+            echo "UPSTREAM_REF=${branch}"
+            echo "UPSTREAM_SHA=$(git rev-parse FETCH_HEAD)"
+          } >>"${GITHUB_ENV}"
+          echo "跟随上游分支：${branch}"
 
       - name: 与基线比较
         id: compare
         run: |
           set -Eeuo pipefail
-          upstream_sha="$(git rev-parse upstream/main)"
+          upstream_sha="${UPSTREAM_SHA}"
           baseline_file=".github/upstream-baseline.txt"
           if [[ -f "${baseline_file}" ]]; then
             baseline="$(tr -d '[:space:]' <"${baseline_file}")"
           else
-            baseline="$(git merge-base HEAD upstream/main)"
+            baseline="$(git merge-base HEAD "${UPSTREAM_SHA}")"
           fi
           {
             echo "upstream=${upstream_sha}"
@@ -101,7 +113,7 @@ jobs:
         id: merge
         run: |
           set -Eeuo pipefail
-          short="$(git rev-parse --short upstream/main)"
+          short="$(git rev-parse --short "${UPSTREAM_SHA}")"
           branch="linux/sync-${short}"
           base="${SYNC_BASE_BRANCH}"
           if git ls-remote --exit-code --heads origin "${base}" >/dev/null 2>&1; then
@@ -117,7 +129,7 @@ jobs:
           # 合并提交需要提交身份；runner 上没有配置，必须显式给出。
           if git -c user.name="upstream-sync[bot]" \
             -c user.email="upstream-sync@users.noreply.github.com" \
-            merge --no-edit upstream/main; then
+            merge --no-edit "upstream/${UPSTREAM_REF}"; then
             echo "conflict=false" >>"${GITHUB_OUTPUT}"
             exit 0
           fi
@@ -203,7 +215,7 @@ jobs:
             cat conflict-files.txt
             echo '```'
             echo
-            echo "需要人工处理：在本地把 upstream/main 合并到 ${SYNC_BASE_BRANCH}，解决冲突后推送。基线未更新，下一次检查仍会报告同一次上游更新。"
+            echo "需要人工处理：在本地把 upstream/${UPSTREAM_REF} 合并到 ${SYNC_BASE_BRANCH}，解决冲突后推送。基线未更新，下一次检查仍会报告同一次上游更新。"
           } >issue-body.md
           gh issue create \
             --title "Upstream update conflict: ${{ steps.summary.outputs.short }}" \

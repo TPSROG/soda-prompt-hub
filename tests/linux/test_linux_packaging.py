@@ -250,7 +250,10 @@ def test_upstream_sync_never_merges_into_the_maintenance_branch() -> None:
     """主任务书 §15 / §16: 每日检查、成功开 PR、冲突开 Issue, 绝不直接合并到维护分支。"""
     workflow = _workflow("upstream-sync.yml")
     assert 'cron: "0 2 * * *"' in workflow, "应为每日一次检查"
-    assert "merge --no-edit upstream/main" in workflow, "应在同步分支上尝试合并"
+    # 跟随上游的哪条分支应可配置（上游为 Linux 线建了 linux/main），缺失时回退 main
+    assert "UPSTREAM_BRANCH" in workflow, "上游分支应可配置"
+    assert 'merge --no-edit "upstream/${UPSTREAM_REF}"' in workflow, "应合并配置的上游分支"
+    assert "回退到 main" in workflow, "上游缺少该分支时应回退到 main"
     # 用 REST 建 PR: fork 里 GraphQL 的 createPullRequest 会被 GITHUB_TOKEN 拒绝
     assert "/pulls" in workflow, "合并成功应通过 REST 开 PR"
     assert "gh issue create" in workflow, "冲突应开 Issue"

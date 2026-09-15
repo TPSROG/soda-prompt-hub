@@ -130,6 +130,9 @@ upstream（官方）── 每日检查 ──▶ 有更新？
 同步分支名 `linux/sync-<上游短 SHA>`，一推送就自动触发 Linux 工作流；基线记录在
 `.github/upstream-baseline.txt`，随合并一起前进。**不会**把上游直接合并进维护分支。
 
+跟随的上游分支默认是 `linux/main`（上游为 Linux 线专门建的分支），可用仓库变量
+`vars.UPSTREAM_BRANCH` 覆盖；上游没有该分支时会自动回退到 `main`。
+
 > **平台限制（已实测确认）**：GitHub 只会运行存在于**默认分支**上的 `schedule`、`workflow_run`
 > 工作流；`gh workflow view upstream-sync.yml` 返回 404（not found on the default branch）。
 > 因此**每日检查与自动发布需要把仓库默认分支设为 `linux/main`**（或在后续阶段把 Linux 线合并进 `main`）。
