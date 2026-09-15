@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import mimetypes
 import tomllib
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
@@ -13,6 +14,36 @@ _KISEGA_SOURCE_ID = "kisegaeningyou"
 _CLIO_SOURCE_ID = "clio-style-preview"
 _ANIMADEX_SOURCE_ID = "animadex"
 _THUMBNAIL_SIZE = (640, 640)
+
+# Formats this project produces must have a fixed media type. CPython's built-in MIME
+# table has no entry for .webp, so `mimetypes` only resolves it through the system
+# /etc/mime.types mapping. Where that mapping is missing (Ubuntu 22.04, minimal images)
+# Starlette's FileResponse falls back to application/octet-stream and browsers stop
+# rendering the image inline.
+_IMAGE_MEDIA_TYPES: dict[str, str] = {
+    ".avif": "image/avif",
+    ".bmp": "image/bmp",
+    ".gif": "image/gif",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".png": "image/png",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
+    ".webp": "image/webp",
+}
+
+
+def media_type_for(path: Path) -> str:
+    """Return a concrete media type for a file we serve ourselves.
+
+    Project-generated image formats get a fixed answer, so serving them never depends
+    on the host MIME database. Other suffixes still go through `mimetypes`.
+    """
+    known = _IMAGE_MEDIA_TYPES.get(path.suffix.casefold())
+    if known is not None:
+        return known
+    guessed, _ = mimetypes.guess_type(path.name)
+    return guessed or "application/octet-stream"
 
 
 def build_kisega_thumbnails(settings: Settings) -> tuple[int, int]:

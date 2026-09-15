@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from prompt_hub.media import media_type_for
 from prompt_hub.web_capture import (
     SourceNotFoundError,
     SourceProtectedError,
@@ -121,6 +122,6 @@ def create_source_router(
             path = web_capture.resolve_media(capture_id)
         except WebCaptureError as error:
             raise HTTPException(status_code=404, detail=str(error)) from error
-        return FileResponse(path)
+        return FileResponse(path, media_type=media_type_for(path))
 
     return router
