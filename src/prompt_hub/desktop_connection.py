@@ -113,9 +113,11 @@ def connection_summary(store: RemoteNodeStore, node_id: str | None = None) -> di
             **result,
             "state": "stale",
             "label": "Worker 连接中断",
-            "detail": "本机 Worker 心跳已过期，请检查启动器中的本机服务；电脑刚唤醒时可稍后刷新。"
-            if local
-            else "心跳已过期，请检查 Windows 是否休眠、Worker 是否仍在运行。",
+            "detail": (
+                f"本机 Worker 心跳已过期，请检查本机服务（{manager}）；电脑刚唤醒时可稍后刷新。"
+                if local
+                else "心跳已过期，请检查 Windows 是否休眠、Worker 是否仍在运行。"
+            ),
         }
     if heartbeat.get("running") is not True:
         return {

@@ -197,7 +197,7 @@ def test_models_root_is_created_and_recorded(tmp_path: Path, isolated: dict[str,
     unit_placeholder = (REPO_ROOT / "deploy" / "linux" / "soda-prompt-hub.service").read_text(
         encoding="utf-8"
     )
-    assert "Environment=PROMPT_HUB_MODELS_ROOT=__SPH_MODELS_ROOT__" in unit_placeholder
+    assert "Environment=__SPH_MODELS_ENV__" in unit_placeholder
 
 
 def test_library_data_is_written_and_survives_restart(

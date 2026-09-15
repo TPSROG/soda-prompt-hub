@@ -18,8 +18,8 @@
 | Linux 便利命令 | `soda-prompt-hub`（start/stop/restart/status/logs/serve/update） |
 | Linux 测试 | `tests/linux/`：启动、数据目录、路径、HTTP 契约 |
 | Linux CI | `.github/workflows/linux.yml`：只补上游没有的部分（Ubuntu 22.04/24.04 矩阵 + 部署冒烟） |
-| 上游同步 | `.github/workflows/upstream-sync.yml`：每日检查，更新则开同步分支 + PR，冲突则开 Issue |
-| 自动 Release | `.github/workflows/release-linux.yml`：`tar.gz` + `SHA256SUMS` |
+| 上游同步 | 固定维护分支 `linux/main`；按需从临时分支合并 `upstream/main`，通过 PR 回合 |
+| Release | 暂不自动化；从通过 Linux CI 的 `linux/main` 手动打包 |
 | 文档 | `docs/linux/INSTALL.md`、`docs/linux/UPDATE.md`、README Linux 章节、CHANGELOG Linux 条目 |
 
 ### 第一阶段明确不做
@@ -111,14 +111,13 @@ curl http://127.0.0.1:8765/api/health
 
 ### Phase 7｜上游同步
 
-`.github/workflows/upstream-sync.yml`：每日一次比对 `upstream/main`；
-有更新 → 建同步分支 → 尝试合并 → 跑 Linux CI → 成功开 PR、失败开 Issue；失败必须显式报告，不得静默。
+按需从 `linux/main` 建临时同步分支，合并 `upstream/main`，跑 Linux CI 后通过 PR 回合；冲突必须人工处理，
+不得直接向维护分支 push。
 
-### Phase 8｜自动 Release
+### Phase 8｜Release
 
-`.github/workflows/release-linux.yml`：仅当上游版本变化且 Linux CI 通过时触发；
-产出 `soda-prompt-hub-linux-x86_64.tar.gz`（`application` / `deploy/` / `scripts/` / `docs/` / `README.md`）
-与 `SHA256SUMS`。
+第一阶段不在 Linux-only 分支启用自动 Release。需要发行时，从已通过 Linux CI 的 `linux/main` 手动产出
+`soda-prompt-hub-linux-x86_64.tar.gz` 与 `SHA256SUMS`。
 
 ### Phase 9｜文档
 
@@ -234,13 +233,15 @@ docs(linux): add Linux installation guide
 - `systemd-user-service` 作业：在 runner 具备用户级 systemd 时执行真实安装、`systemctl --user status`、健康检查、`uninstall.sh`，并断言卸载后用户数据仍在。
 - 这些命令与上游 `ci.yml` 相同，使 Linux 工作流可独立作为发布前的质量闸门；新增价值在 22.04/24.04 矩阵与部署冒烟。
 
-### Phase 7｜上游同步 — ✅ 工作流就绪
+### Phase 7｜上游同步 — ✅ 固定分支人工维护
 
-`.github/workflows/upstream-sync.yml`：每日 02:00 UTC 检查上游；有更新则建 `linux/sync-<sha>` 分支（推送后自动触发 Linux CI）→ 尝试合并 → 成功开 PR 并把新基线写入 `.github/upstream-baseline.txt`，冲突则开 Issue 并保留基线。**绝不**直接合并到维护分支。
+从 `linux/main` 建 `linux/sync-<sha>` 临时分支，合并 `upstream/main`，推送后运行 Linux CI，再通过 PR
+回合；冲突人工处理。**绝不**直接合并或 push 到维护分支。
 
-### Phase 8｜自动 Release — ✅ 工作流就绪
+### Phase 8｜Release — ⏸ 暂不自动化
 
-`.github/workflows/release-linux.yml`：Linux 工作流成功后检查版本，若该版本尚无 `v<版本>-linux-<日期>` 发行包，则产出 `soda-prompt-hub-linux-x86_64-<版本>-<日期>.tar.gz` + `SHA256SUMS` 并创建预发布。打包逻辑已在 WSL 端到端验证（3.1 MB 包，解包后 `install.sh` 可用且服务健康）。
+非默认分支上的 `schedule` / `workflow_run` 不会按预期触发，因此本分支不携带自动发布工作流。
+需要发行时，从已通过 Linux CI 的 `linux/main` 手动打包并校验 `SHA256SUMS`。
 
 ### Phase 9｜文档 — ✅ 完成
 
@@ -263,8 +264,8 @@ docs(linux): add Linux installation guide
 
 | 项目 | 说明 |
 | --- | --- |
-| 默认分支 | `schedule` / `workflow_run` / `workflow_dispatch` 都要求工作流存在于**默认分支**；实测 `upstream-sync.yml`、`release-linux.yml` 返回 404（not found on the default branch）。需要把仓库默认分支设为 `linux/main`（或把 Linux 线合进 `main`）才能启用每日检查与自动发布 |
-| §28 上游更新验收 | 依赖上一条；启用后模拟一次上游提交即可验收 |
+| 自动化调度 | 默认分支继续保持 `main`；如未来需要定时同步，应在 `main` 单独审查最小调度 workflow，并固定操作 `linux/main` |
+| §28 上游更新验收 | 按固定分支的人工同步流程模拟一次上游提交并验收 |
 | 上游 PR | ✅ 已提交：[#20](https://github.com/cOkieeman/soda-prompt-hub/pull/20)（WebP 媒体类型）与 [#21](https://github.com/cOkieeman/soda-prompt-hub/pull/21)（心跳用例时间戳），均从 `upstream/main` 拉出、各自只有一个提交、不含 Linux 部署内容；等待上游审核 |
 | G1 / G2 / F1 / F2 | `usage_mode` 的 `linux_local` 语义、SMB 配对限制、数据集浏览的外接卷与快捷入口；可沿用“先修 + 反哺上游”的既有轨道 |
 | Phase 10 | 干净 Ubuntu 上的完整验收已在 WSL2 与 GitHub runner 完成；如需真实 VPS，可在启用默认分支后重跑 |

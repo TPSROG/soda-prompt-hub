@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEPLOY_LINUX = REPO_ROOT / "deploy" / "linux"
 UNIT_TEMPLATE = DEPLOY_LINUX / "soda-prompt-hub.service"
+WORKER_UNIT_TEMPLATE = DEPLOY_LINUX / "soda-worker.service"
 
 # 主任务书 §5 要求的最小脚本集合, 外加便利命令
 SHELL_SCRIPTS = (
@@ -33,14 +35,6 @@ SHELL_SCRIPTS = (
 
 # lib.sh 是被 source 的函数库, 本身不设置 shell 选项
 STANDALONE_SCRIPTS = tuple(name for name in SHELL_SCRIPTS if name != "lib.sh")
-
-UNIT_PLACEHOLDERS = (
-    "__SPH_REPO__",
-    "__SPH_LIBRARY_ROOT__",
-    "__SPH_MODELS_ROOT__",
-    "__SPH_HOST__",
-    "__SPH_PORT__",
-)
 
 
 def _text(name: str) -> str:
@@ -108,25 +102,120 @@ def test_systemd_unit_is_a_user_service_with_restart_policy() -> None:
         "NoNewPrivileges=yes",
         "KillSignal=SIGINT",
         "WorkingDirectory=__SPH_REPO__",
-        "Environment=PROMPT_HUB_LIBRARY_ROOT=__SPH_LIBRARY_ROOT__",
-        "Environment=PROMPT_HUB_MODELS_ROOT=__SPH_MODELS_ROOT__",
+        "Environment=__SPH_LIBRARY_ENV__",
+        "Environment=__SPH_MODELS_ENV__",
     ):
         assert directive in unit, f"unit 缺少 {directive}"
     assert "User=root" not in unit
-    expected_exec = (
-        "ExecStart=__SPH_REPO__/.venv/bin/prompt-hub serve --host __SPH_HOST__ --port __SPH_PORT__"
-    )
+    expected_exec = "ExecStart=__SPH_CORE_EXEC__ serve --host __SPH_HOST__ --port __SPH_PORT__"
     assert expected_exec in unit
 
 
-def test_installer_renders_every_placeholder_in_the_template() -> None:
-    unit = _text(UNIT_TEMPLATE.name)
-    declared = set(re.findall(r"__SPH_[A-Z_]+__", unit))
-    assert declared == set(UNIT_PLACEHOLDERS)
-
+def test_installer_and_updater_share_systemd_renderers() -> None:
+    lib = _text("lib.sh")
     install = _text("install.sh")
-    for placeholder in sorted(declared):
-        assert f"${{UNIT_CONTENT//{placeholder}/" in install, f"install.sh 没有替换 {placeholder}"
+    update = _text("update.sh")
+    for function_name in ("sph_write_core_unit", "sph_write_worker_unit"):
+        assert f"{function_name}()" in lib
+        assert function_name in install
+        assert function_name in update
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="GNU realpath and systemd are Linux contracts")
+def test_safe_purge_path_resolves_dotdot_and_symlinks(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    allowed = home / "library"
+    outside = tmp_path / "outside"
+    allowed.mkdir(parents=True)
+    outside.mkdir()
+    (home / "escape").symlink_to(outside, target_is_directory=True)
+
+    bash = shutil.which("bash")
+    assert bash is not None
+
+    def resolve(candidate: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(  # noqa: S603 - fixed shell and sourced project file
+            [
+                bash,
+                "-c",
+                'source "$1"; sph_safe_purge_path "$2"',
+                "bash",
+                str(DEPLOY_LINUX / "lib.sh"),
+                str(candidate),
+            ],
+            env={"HOME": str(home), "PATH": "/usr/bin:/bin"},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    accepted = resolve(allowed)
+    assert accepted.returncode == 0
+    assert accepted.stdout == str(allowed.resolve())
+    assert resolve(home / ".." / "outside").returncode != 0
+    assert resolve(home / "escape" / "data").returncode != 0
+
+
+@pytest.mark.skipif(
+    sys.platform != "linux" or shutil.which("systemd-analyze") is None,
+    reason="systemd-analyze is required for unit verification",
+)
+def test_rendered_systemd_units_support_spaces_and_percent(tmp_path: Path) -> None:
+    repo = tmp_path / "repo 100% ready"
+    library = tmp_path / "library 100% ready"
+    models = tmp_path / "models 100% ready"
+    config = tmp_path / "config 100% ready" / "worker.json"
+    core_exec = repo / ".venv" / "bin" / "prompt-hub"
+    worker_python = repo / ".venv" / "bin" / "python"
+    for executable in (core_exec, worker_python):
+        executable.parent.mkdir(parents=True, exist_ok=True)
+        executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        executable.chmod(0o755)
+    library.mkdir()
+    models.mkdir()
+    config.parent.mkdir()
+    config.write_text("{}\n", encoding="utf-8")
+    core_unit = tmp_path / "soda-prompt-hub.service"
+    worker_unit = tmp_path / "soda-worker.service"
+
+    bash = shutil.which("bash")
+    assert bash is not None
+    render = subprocess.run(  # noqa: S603 - fixed shell and sourced project file
+        [
+            bash,
+            "-c",
+            (
+                'source "$1"; '
+                'sph_write_core_unit "$2" "$3" "$4" "$5" "$6" "$7" "$8"; '
+                'sph_write_worker_unit "$9" "${10}" "$4" "${11}"'
+            ),
+            "bash",
+            str(DEPLOY_LINUX / "lib.sh"),
+            str(UNIT_TEMPLATE),
+            str(core_unit),
+            str(repo),
+            str(library),
+            str(models),
+            "127.0.0.1",
+            "8765",
+            str(WORKER_UNIT_TEMPLATE),
+            str(worker_unit),
+            str(config),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert render.returncode == 0, render.stderr
+    systemd_analyze = shutil.which("systemd-analyze")
+    assert systemd_analyze is not None
+    verify = subprocess.run(  # noqa: S603 - resolved system utility and generated files
+        [systemd_analyze, "verify", str(core_unit), str(worker_unit)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert verify.returncode == 0, verify.stderr
 
 
 def test_data_directories_follow_xdg_and_env_vars() -> None:
@@ -148,6 +237,15 @@ def test_update_is_fast_forward_only_and_data_safe() -> None:
     assert "git status --porcelain" in update, "更新前必须检查工作区"
     assert "rm -rf" not in update, "更新脚本不得删除任何东西"
     assert "sph_data_usage" in update, "更新必须给出用户数据未改动的证据"
+    assert 'is-active --quiet "soda-worker.service"' in update
+    assert 'restart "soda-worker.service"' in update
+
+
+def test_worker_config_and_private_data_home_are_owner_only() -> None:
+    install = _text("install.sh")
+    assert 'mkdir -p "${DATA_HOME}"' in install
+    assert 'chmod 0700 "${DATA_HOME}"' in install
+    assert 'chmod 0600 "${WORKER_CONFIG}"' in install
 
 
 def test_uninstall_keeps_user_data_by_default() -> None:
@@ -156,7 +254,8 @@ def test_uninstall_keeps_user_data_by_default() -> None:
     confirm_at = uninstall.index("if ((PURGE == 0))")
     delete_at = uninstall.index("rm -rf -- ")
     assert confirm_at < delete_at, "默认分支必须排在删除逻辑之前"
-    assert 'case "${target}" in' in uninstall, "删除目标必须经过路径白名单检查"
+    assert 'sph_safe_purge_path "${target}"' in uninstall, "删除目标必须经过规范化白名单检查"
+    assert 'rm -rf -- "$(sph_worker_share_root)"' not in uninstall
 
 
 def test_scripts_are_lf_utf8_without_local_paths() -> None:
@@ -198,7 +297,7 @@ def test_linux_worker_packaging_is_complete() -> None:
     """Linux Compute Worker 的配置模板、便利命令与 systemd 单元都要齐备。"""
     unit = _text("soda-worker.service")
     assert "WorkingDirectory=__SPH_REPO__" in unit
-    assert "ExecStart=__SPH_REPO__/.venv/bin/python -m prompt_hub.windows_worker" in unit
+    assert "ExecStart=__SPH_WORKER_PYTHON__ -m prompt_hub.windows_worker" in unit
     assert "--config __SPH_WORKER_CONFIG__" in unit
     assert "Restart=on-failure" in unit
     assert "WantedBy=default.target" in unit
@@ -211,8 +310,7 @@ def test_linux_worker_packaging_is_complete() -> None:
 
     install = _text("install.sh")
     assert "--with-worker" in install
-    assert "${WORKER_UNIT_CONTENT//__SPH_REPO__/" in install
-    assert "${WORKER_UNIT_CONTENT//__SPH_WORKER_CONFIG__/" in install
+    assert "sph_write_worker_unit" in install
     assert "${WORKER_JSON//__SPH_WORKER_BRIDGE_ROOT__/" in install
 
     launcher = _text("soda-worker.sh")
@@ -246,37 +344,7 @@ def test_linux_workflow_runs_existing_checks_and_deployment_smoke() -> None:
         assert forbidden not in workflow, f"linux.yml 引入了新工具 {forbidden}"
 
 
-def test_upstream_sync_never_merges_into_the_maintenance_branch() -> None:
-    """主任务书 §15 / §16: 每日检查、成功开 PR、冲突开 Issue, 绝不直接合并到维护分支。"""
-    workflow = _workflow("upstream-sync.yml")
-    assert 'cron: "0 2 * * *"' in workflow, "应为每日一次检查"
-    # 跟随上游的哪条分支应可配置（上游为 Linux 线建了 linux/main），缺失时回退 main
-    assert "UPSTREAM_BRANCH" in workflow, "上游分支应可配置"
-    assert 'merge --no-edit "upstream/${UPSTREAM_REF}"' in workflow, "应合并配置的上游分支"
-    assert "回退到 main" in workflow, "上游缺少该分支时应回退到 main"
-    # 用 REST 建 PR: fork 里 GraphQL 的 createPullRequest 会被 GITHUB_TOKEN 拒绝
-    assert "/pulls" in workflow, "合并成功应通过 REST 开 PR"
-    assert "gh issue create" in workflow, "冲突应开 Issue"
-    assert "--force-with-lease origin" in workflow, "只应推送同步分支"
-    assert "upstream-baseline.txt" in workflow, "应记录已同步的上游基线"
-    # 合并提交需要提交身份, runner 上默认没有 (曾因此把 CI 失败误判成冲突)
-    assert "-c user.name=" in workflow, "合并前必须提供提交身份"
-    assert "conflict-files.txt" in workflow, "应区分内容冲突与其它合并错误"
-    # 不允许把上游直接推/合并到维护分支
-    assert "push origin main" not in workflow
-    assert "push origin ${SYNC_BASE_BRANCH}" not in workflow
-    assert "merge --no-edit origin" not in workflow
-
-
-def test_release_workflow_publishes_prerelease_with_checksums() -> None:
-    """主任务书 §17: 仅在 CI 通过且版本变化时, 产出 tar.gz + SHA256SUMS。"""
-    workflow = _workflow("release-linux.yml")
-    assert "workflow_run" in workflow
-    assert "conclusion == 'success'" in workflow
-    assert "sha256sum" in workflow
-    assert "SHA256SUMS" in workflow
-    assert "--prerelease" in workflow
-    assert "tar -C" in workflow
-    # `tar -tzf ... | head` 在 pipefail 下会因 SIGPIPE 失败 (曾导致发布步骤中断)
-    assert "| head -n 20" not in workflow, "不要在 pipefail 下用 head 截断 tar 输出"
-    assert "contents.txt" in workflow
+def test_default_branch_only_automation_is_not_shipped_on_linux_branch() -> None:
+    workflows = REPO_ROOT / ".github" / "workflows"
+    assert not (workflows / "upstream-sync.yml").exists()
+    assert not (workflows / "release-linux.yml").exists()

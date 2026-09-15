@@ -7,6 +7,7 @@ Linux runs Core and the Compute Worker on the same box, so it gets `linux_local`
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from unittest.mock import Mock
@@ -44,6 +45,7 @@ def test_linux_render_declares_linux_local_and_linux_paths() -> None:
     assert 'placeholder="~/Pictures/my-dataset"' in markup
     assert 'placeholder="~/models/vision_model.onnx"' in markup
     assert "window.isPromptHubLocal" in markup
+    assert "本机任务目录暂不可用。请检查本机服务" in markup
 
 
 def test_linux_is_not_described_as_mac_remote() -> None:
@@ -95,6 +97,30 @@ def test_linux_heartbeat_reports_local_worker_state(
     result = connection_summary(store)
     assert result["label"] == "本机 Worker 待确认"
     assert "deploy/linux 安装脚本" in result["detail"]
+
+
+def test_linux_stale_heartbeat_names_the_linux_service_manager(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr("prompt_hub.desktop_connection.sys", SimpleNamespace(platform="linux"))
+    store = Mock()
+    store.list_nodes.return_value = [
+        {"node_id": "local", "role": "compute_5060ti", "enabled": True}
+    ]
+    store.diagnostics.return_value = {
+        "state": "ready",
+        "mount_exists": True,
+        "bridge_root": str(tmp_path),
+    }
+    checked_at = (datetime.now(UTC) - timedelta(minutes=5)).isoformat()
+    monkeypatch.setattr(
+        "prompt_hub.desktop_connection._read_json",
+        lambda *_args, **_kwargs: {"checked_at": checked_at, "running": True},
+    )
+    result = connection_summary(store)
+    assert result["state"] == "stale"
+    assert "deploy/linux 安装脚本" in result["detail"]
+    assert "启动器" not in result["detail"]
 
 
 def test_local_service_manager_labels() -> None:

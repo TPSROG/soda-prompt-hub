@@ -19,7 +19,7 @@ StartLimitBurst=5
 [Service]
 Type=simple
 WorkingDirectory=__SPH_REPO__
-ExecStart=__SPH_REPO__/.venv/bin/python -m prompt_hub.windows_worker --config __SPH_WORKER_CONFIG__
+ExecStart=__SPH_WORKER_PYTHON__ -m prompt_hub.windows_worker --config __SPH_WORKER_CONFIG__
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=20

@@ -91,6 +91,22 @@ sph_abs_path() {
     esac
 }
 
+sph_safe_purge_path() {
+    # Resolve dot segments and symlinked parents before allowing recursive deletion.
+    # Linux deployments rely on GNU realpath; -m also handles paths that disappeared
+    # between reading install.env and running the uninstaller.
+    local target="$1" canonical_target canonical_home
+    command -v realpath >/dev/null 2>&1 || return 1
+    canonical_target="$(realpath -m -- "${target}")" || return 1
+    canonical_home="$(realpath -m -- "${HOME}")" || return 1
+    case "${canonical_target}" in
+        "${canonical_home}"/* | /mnt/*)
+            printf '%s' "${canonical_target}"
+            ;;
+        *) return 1 ;;
+    esac
+}
+
 # ---------------------------------------------------------------- 安装记录
 # install.env 由 install.sh 写入，其余脚本读取。缺失时返回非零。
 sph_load_install_env() {
@@ -213,6 +229,76 @@ sph_data_usage() {
 }
 
 # ---------------------------------------------------------------- systemd 操作
+sph_systemd_escape() {
+    # Escape one systemd value. Percent is a specifier prefix in unit settings.
+    local value="$1"
+    case "${value}" in
+        *$'\n'* | *$'\r'*)
+            sph_err "systemd 配置值不能包含换行符"
+            return 1
+            ;;
+    esac
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    value="${value//%/%%}"
+    printf '%s' "${value}"
+}
+
+sph_systemd_quote() {
+    local value
+    value="$(sph_systemd_escape "$1")" || return 1
+    printf '"%s"' "${value}"
+}
+
+sph_systemd_exec_quote() {
+    # ExecStart also expands $VAR; $$ passes a literal dollar sign.
+    local value="$1"
+    value="${value//\$/\$\$}"
+    sph_systemd_quote "${value}"
+}
+
+sph_write_core_unit() {
+    local template="$1" output="$2" repo="$3" library="$4" models="$5" host="$6" port="$7"
+    local content repo_value library_env models_env core_exec host_value port_value
+    [[ -f "${template}" ]] || {
+        sph_err "缺少服务模板：${template}"
+        return 1
+    }
+    content="$(<"${template}")"
+    repo_value="$(sph_systemd_escape "${repo}")" || return 1
+    library_env="$(sph_systemd_quote "PROMPT_HUB_LIBRARY_ROOT=${library}")" || return 1
+    models_env="$(sph_systemd_quote "PROMPT_HUB_MODELS_ROOT=${models}")" || return 1
+    core_exec="$(sph_systemd_exec_quote "${repo}/.venv/bin/prompt-hub")" || return 1
+    host_value="$(sph_systemd_exec_quote "${host}")" || return 1
+    port_value="$(sph_systemd_exec_quote "${port}")" || return 1
+    content="${content//__SPH_REPO__/"${repo_value}"}"
+    content="${content//__SPH_LIBRARY_ENV__/"${library_env}"}"
+    content="${content//__SPH_MODELS_ENV__/"${models_env}"}"
+    content="${content//__SPH_CORE_EXEC__/"${core_exec}"}"
+    content="${content//__SPH_HOST__/"${host_value}"}"
+    content="${content//__SPH_PORT__/"${port_value}"}"
+    printf '%s\n' "${content}" >"${output}"
+    chmod 0644 "${output}"
+}
+
+sph_write_worker_unit() {
+    local template="$1" output="$2" repo="$3" config="$4"
+    local content repo_value worker_python config_value
+    [[ -f "${template}" ]] || {
+        sph_err "缺少 Worker 服务模板：${template}"
+        return 1
+    }
+    content="$(<"${template}")"
+    repo_value="$(sph_systemd_escape "${repo}")" || return 1
+    worker_python="$(sph_systemd_exec_quote "${repo}/.venv/bin/python")" || return 1
+    config_value="$(sph_systemd_exec_quote "${config}")" || return 1
+    content="${content//__SPH_REPO__/"${repo_value}"}"
+    content="${content//__SPH_WORKER_PYTHON__/"${worker_python}"}"
+    content="${content//__SPH_WORKER_CONFIG__/"${config_value}"}"
+    printf '%s\n' "${content}" >"${output}"
+    chmod 0644 "${output}"
+}
+
 sph_systemd_start() {
     systemctl --user start "${SPH_SERVICE_NAME}.service"
 }

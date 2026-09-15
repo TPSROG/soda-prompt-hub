@@ -84,13 +84,58 @@ printf -- '\n--- 同步依赖（uv sync --locked）---\n'
 uv sync --locked
 sph_ok "依赖已同步"
 
+# Reload helpers from the updated checkout before regenerating installed units.
+# This keeps future template changes in sync with files already under ~/.config.
+# shellcheck source=lib.sh
+source "${SCRIPT_DIR}/lib.sh"
+
+printf -- '\n--- 更新服务配置 ---\n'
+UNITS_REFRESHED=0
+if sph_service_installed; then
+    sph_write_core_unit \
+        "${SCRIPT_DIR}/${SPH_SERVICE_NAME}.service" \
+        "$(sph_unit_path)" \
+        "${SPH_REPO}" \
+        "${SPH_LIBRARY_ROOT}" \
+        "${SPH_MODELS_ROOT}" \
+        "${SPH_HOST}" \
+        "${SPH_PORT}" || sph_die "无法更新 systemd 用户服务"
+    sph_ok "Core unit 已更新"
+    UNITS_REFRESHED=1
+fi
+
+WORKER_UNIT="$(sph_worker_unit_path)"
+WORKER_CONFIG="$(sph_worker_config_path)"
+if [[ -f "${WORKER_UNIT}" ]]; then
+    if [[ -f "${WORKER_CONFIG}" ]]; then
+        chmod 0600 "${WORKER_CONFIG}"
+        sph_write_worker_unit \
+            "${SCRIPT_DIR}/soda-worker.service" \
+            "${WORKER_UNIT}" \
+            "${SPH_REPO}" \
+            "${WORKER_CONFIG}" || sph_die "无法更新 Worker systemd 用户服务"
+        sph_ok "Worker unit 已更新"
+        UNITS_REFRESHED=1
+    else
+        sph_warn "已安装 Worker unit，但缺少 ${WORKER_CONFIG}；跳过 Worker unit 更新"
+    fi
+fi
+
 printf -- '\n--- 重启服务 ---\n'
 RESTARTED=0
-if sph_service_installed && sph_have_systemd_user; then
-    sph_systemd_daemon_reload
-    sph_systemd_restart
-    sph_ok "systemd 用户服务已重启"
-    RESTARTED=1
+if sph_have_systemd_user; then
+    if ((UNITS_REFRESHED == 1)); then
+        sph_systemd_daemon_reload
+    fi
+    if sph_service_installed; then
+        sph_systemd_restart
+        sph_ok "systemd 用户服务已重启"
+        RESTARTED=1
+    fi
+    if [[ -f "${WORKER_UNIT}" ]] && systemctl --user is-active --quiet "soda-worker.service"; then
+        systemctl --user restart "soda-worker.service"
+        sph_ok "Worker 用户服务已重启"
+    fi
 fi
 if pid="$(sph_direct_pid)"; then
     "${SCRIPT_DIR}/stop.sh" >/dev/null

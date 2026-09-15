@@ -19,10 +19,10 @@ StartLimitBurst=5
 [Service]
 Type=simple
 WorkingDirectory=__SPH_REPO__
-Environment=PROMPT_HUB_LIBRARY_ROOT=__SPH_LIBRARY_ROOT__
-Environment=PROMPT_HUB_MODELS_ROOT=__SPH_MODELS_ROOT__
+Environment=__SPH_LIBRARY_ENV__
+Environment=__SPH_MODELS_ENV__
 Environment=PYTHONUNBUFFERED=1
-ExecStart=__SPH_REPO__/.venv/bin/prompt-hub serve --host __SPH_HOST__ --port __SPH_PORT__
+ExecStart=__SPH_CORE_EXEC__ serve --host __SPH_HOST__ --port __SPH_PORT__
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=20

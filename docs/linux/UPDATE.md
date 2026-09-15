@@ -10,9 +10,10 @@
 2. 检查工作区是否干净，有未提交改动时**拒绝更新**（可用 `--force` 覆盖）；
 3. `git fetch --prune --tags`，然后 **只允许快进**（`git merge --ff-only`）；
 4. `uv sync --locked` 同步依赖；
-5. 重启 systemd 用户服务（或直接运行的实例）；
-6. 轮询 `/api/health` 确认服务恢复；
-7. 再次打印数据度量并逐项比对，给出“资料库与数据库未发生改动”的结论。
+5. 重新生成已安装的 Core / Worker systemd unit，并收紧 Worker 配置权限；
+6. 重启 Core、正在运行的 Worker（或直接运行的 Core 实例）；
+7. 轮询 `/api/health` 确认服务恢复；
+8. 再次打印数据度量并逐项比对，给出“资料库与数据库未发生改动”的结论。
 
 脚本**不包含任何删除动作**，也不会触碰资料库、数据库、图片、Prompt、Workflow 与模型目录。
 
@@ -39,9 +40,9 @@ soda-prompt-hub update
 uv run --no-sync prompt-hub backup --destination ~/soda-backup
 ```
 
-## 从自动 Release 更新
+## 从手动发行包更新
 
-发行包只替换程序本体，不碰用户数据：
+维护者确认对应 `linux/main` 已通过 Linux CI 后，可以手动制作发行包。发行包只替换程序本体，不碰用户数据：
 
 ```bash
 sha256sum -c SHA256SUMS
@@ -49,7 +50,7 @@ tar -xzf soda-prompt-hub-linux-x86_64-<新版本>.tar.gz
 rsync -a --delete soda-prompt-hub/src/ <程序目录>/src/
 rsync -a soda-prompt-hub/deploy/ <程序目录>/deploy/
 cp soda-prompt-hub/pyproject.toml soda-prompt-hub/uv.lock <程序目录>/
-cd <程序目录> && uv sync --locked && systemctl --user restart soda-prompt-hub
+cd <程序目录> && ./deploy/linux/update.sh --ref <已验证的提交或标签>
 ```
 
 ## 回滚

@@ -73,12 +73,12 @@ git switch linux/main
 | Phase 4 | `deploy/linux/`：安装 / 卸载 / 更新 / 启停 / 状态 + systemd 用户服务 | 14 项实机验收（见实施计划 §7） |
 | Phase 5 | `tests/linux/`：部署层静态契约测试 + Linux 行为测试 | 25 个用例；完整套件 577 passed |
 | Phase 6 | `.github/workflows/linux.yml`：格式 / Lint / 类型检查、22.04 + 24.04 测试、部署冒烟、systemd 用户服务 | 4 个作业全绿 |
-| Phase 7 | `.github/workflows/upstream-sync.yml`：每日检查上游，自动开同步 PR，冲突开 Issue | 见 [上游同步机制](#上游同步机制) |
-| Phase 8 | `.github/workflows/release-linux.yml`：版本变化且 CI 通过时产出 `tar.gz` + `SHA256SUMS` | 打包逻辑已端到端实测 |
+| Phase 7 | 固定维护分支 `linux/main`；按需手动合并 `upstream/main` 并通过 PR 审查 | 见 [上游同步机制](#上游同步机制) |
+| Phase 8 | Release 暂不自动化；需要时从已通过 Linux CI 的 `linux/main` 手动打包 | 避免非默认分支的失效触发器与写权限风险 |
 | Phase 9 | 文档：本目录、根 README 的 Linux 章节、CHANGELOG | 本页与 [INSTALL](INSTALL.md) / [UPDATE](UPDATE.md) |
 
 **刻意的约束**：Linux 侧改动几乎全部是新增文件（`deploy/linux/`、`scripts/linux/`、`tests/linux/`、
-`docs/linux/`、三个工作流）。核心代码只改了下面两个真实缺陷——目的是让这个分支随时能干净地跟随上游 rebase。
+`docs/linux/`、Linux CI 工作流）。核心代码只改了下面两个真实缺陷——目的是让这个分支随时能干净地跟随上游 rebase。
 
 ## 修复并已提交上游的缺陷
 
@@ -86,8 +86,8 @@ git switch linux/main
 
 | PR | 内容 | 状态 |
 | --- | --- | --- |
-| [#20](https://github.com/cOkieeman/soda-prompt-hub/pull/20) | `fix: 显式指定图片媒体类型，不再依赖系统 MIME 数据库` | OPEN |
-| [#21](https://github.com/cOkieeman/soda-prompt-hub/pull/21) | `test: 心跳新鲜度用例改为在执行时生成时间戳` | OPEN |
+| [#20](https://github.com/cOkieeman/soda-prompt-hub/pull/20) | `fix: 显式指定图片媒体类型，不再依赖系统 MIME 数据库` | MERGED |
+| [#21](https://github.com/cOkieeman/soda-prompt-hub/pull/21) | `test: 心跳新鲜度用例改为在执行时生成时间戳` | MERGED |
 
 ### #20 WebP 缩略图被当成二进制流下发（真实缺陷）
 
@@ -113,29 +113,13 @@ git switch linux/main
 
 ## 上游同步机制
 
-```text
-upstream（官方）── 每日检查 ──▶ 有更新？
-                              │
-                     ┌────────┴────────┐
-                     ▼                 ▼
-              建同步分支并合并       合并冲突
-                     │                 │
-                     ▼                 ▼
-              自动跑 Linux CI      开 Issue（人工处理）
-                     │
-                     ▼
-                 开 Pull Request
-```
+`linux/main` 是独立维护分支。需要同步时，从它创建临时分支，合并 `upstream/main`，解决冲突并让
+`.github/workflows/linux.yml` 全绿后，再通过 PR 合回 `linux/main`。不要直接 push 合并结果到维护分支。
 
-同步分支名 `linux/sync-<上游短 SHA>`，一推送就自动触发 Linux 工作流；基线记录在
-`.github/upstream-baseline.txt`，随合并一起前进。**不会**把上游直接合并进维护分支。
-
-跟随的上游分支默认是 `linux/main`（上游为 Linux 线专门建的分支），可用仓库变量
-`vars.UPSTREAM_BRANCH` 覆盖；上游没有该分支时会自动回退到 `main`。
-
-> **平台限制（已实测确认）**：GitHub 只会运行存在于**默认分支**上的 `schedule`、`workflow_run`
-> 工作流；`gh workflow view upstream-sync.yml` 返回 404（not found on the default branch）。
-> 因此**每日检查与自动发布需要把仓库默认分支设为 `linux/main`**（或在后续阶段把 Linux 线合并进 `main`）。
+`schedule`、`workflow_run` 与 `workflow_dispatch` 要求工作流存在于默认分支。本仓库默认分支继续保持
+`main`，所以 Linux-only 分支不携带自动同步或自动 Release 工作流。以后若确实需要定时任务，应在
+`main` 上单独审查一个最小调度工作流，并把 checkout ref 固定为 `linux/main`；不得 checkout 任意
+PR 的 `head_sha` 后使用写权限。
 
 ## 已知限制
 

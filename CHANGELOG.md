@@ -12,8 +12,8 @@
 - 新增 `soda-prompt-hub` 便利命令：`start` / `stop` / `restart` / `status` / `logs` / `serve` / `update` / `version`。
 - 新增 `tests/linux/`：部署层静态契约测试，以及使用隔离 `HOME` / XDG 路径的 Linux 行为测试。
 - 新增 `.github/workflows/linux.yml`：Ubuntu 22.04 与 24.04 完整测试、部署冒烟、systemd 用户服务验收。
-- 新增 `.github/workflows/upstream-sync.yml`：每日检查上游更新，自动建同步分支并开 PR；出现冲突时开 Issue，不直接合并。
-- 新增 `.github/workflows/release-linux.yml`：上游版本变化且 Linux CI 通过时产出 `tar.gz` 与 `SHA256SUMS`。
+- 固定维护分支使用 `linux/main`；上游同步与发行暂由维护者手动执行，不在非默认分支放置无法触发的
+  `schedule` / `workflow_run` 工作流。
 - 新增 `scripts/linux/check-env.sh` 环境自检；Linux 文档见 `docs/linux/`。
 - 新增 Linux Compute Worker（实验性）：`install.sh --with-worker` 准备桥接目录、`soda-worker` 命令与
   systemd 单元；Worker 从桥接目录领取任务、调用 ComfyUI HTTP API 出图并回传带 sha256 的结果。
@@ -22,6 +22,8 @@
 - 新增 Linux 本机使用模式（`linux_local`）：Core 与 Compute Worker 在同一台机器上通过本地桥接目录协作，
   界面文案、示例路径与配对入口按平台区分；`install.sh --with-worker` 会登记本机计算节点，设备页直接可用。
 - ComfyUI 地址不再限制为本机：支持 `http(s)` 任意主机，并支持 `https://用户名:密码@主机` 形式的 HTTP Basic 认证。
+- Linux 部署安全加固：卸载前解析真实路径，systemd unit 支持空格和 `%` 路径，Worker 配置仅当前用户可读，
+  更新时同步刷新 Core / Worker unit 并重启正在运行的 Worker。
 - 已知限制：LoRA 正式训练仍仅限 Windows；SMB 双机配对在 Linux 上用本地桥接目录代替。
 
 ### 1.1.1 预发布修复

@@ -115,30 +115,26 @@ else
         printf '将删除以下目录及其全部内容：\n'
         printf '  资料库: %s\n' "${LIBRARY_ROOT:-（未记录）}"
         printf '  模型:   %s\n' "${MODELS_ROOT:-（未记录）}"
+        printf '  Worker: %s\n' "$(sph_worker_share_root)"
         printf '确认请输入 yes：'
         read -r reply
         [[ "${reply}" == "yes" ]] || sph_die "已取消（未删除任何数据）"
     fi
 
-    for target in "${LIBRARY_ROOT}" "${MODELS_ROOT}"; do
+    for target in "${LIBRARY_ROOT}" "${MODELS_ROOT}" "$(sph_worker_share_root)"; do
         [[ -n "${target}" ]] || continue
-        # 安全检查：只删除 HOME 之下或 /mnt 之下的路径
-        case "${target}" in
-            "${HOME}"/* | /mnt/*) ;;
-            *)
-                sph_warn "跳过可疑路径（不在 ${HOME} 或 /mnt 之下）：${target}"
-                continue
-                ;;
-        esac
-        if [[ -d "${target}" ]]; then
-            rm -rf -- "${target}"
-            sph_ok "已删除 ${target}"
+        if ! safe_target="$(sph_safe_purge_path "${target}")"; then
+            sph_warn "跳过可疑路径（解析后不在 ${HOME} 或 /mnt 之下）：${target}"
+            continue
+        fi
+        if [[ -d "${safe_target}" ]]; then
+            rm -rf -- "${safe_target}"
+            sph_ok "已删除 ${safe_target}"
         fi
     done
 
     rm -f "${ENV_FILE}"
     rm -f "$(sph_worker_config_path)"
-    rm -rf -- "$(sph_worker_share_root)"
     rmdir "$(sph_data_home)" 2>/dev/null || true
     sph_ok "已移除安装记录"
 fi

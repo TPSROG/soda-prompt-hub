@@ -217,8 +217,8 @@ Soda Prompt Hub Linux 适配审计报告（第一阶段交付物）。
 | Phase 4 | Linux 部署：`deploy/linux/{install,uninstall,update,start,stop,status}.sh` + `soda-prompt-hub.service` | 否 |
 | Phase 5 | Linux 测试：`tests/linux/`（启动、数据目录、路径、UTF-8/空格/中文、API） | 否 |
 | Phase 6 | Linux CI：`.github/workflows/linux.yml`（补充上游没有的部署冒烟与 22.04/24.04 矩阵） | 否 |
-| Phase 7 | 上游同步：`.github/workflows/upstream-sync.yml` | 否 |
-| Phase 8 | 自动 Release：`.github/workflows/release-linux.yml`（`tar.gz` + `SHA256SUMS`） | 否 |
+| Phase 7 | 上游同步：固定 `linux/main`，临时同步分支经 PR 回合 | 否 |
+| Phase 8 | Release：暂不自动化，按需从通过 CI 的 `linux/main` 手动打包 | 否 |
 | Phase 9 | 文档：`docs/linux/INSTALL.md`、`docs/linux/UPDATE.md`、`docs/linux/DEV_ENVIRONMENT.md`、README / CHANGELOG | 否 |
 | Phase 10 | 最终验收（主任务书 §27/§29） | 否 |
 | 独立轨道 | G1 反哺上游 PR（`linux_local` 使用模式） | **是** |
@@ -236,7 +236,7 @@ Soda Prompt Hub Linux 适配审计报告（第一阶段交付物）。
 | 5. 哪些功能仍 Windows-only？ | Compute Worker、桌面宿主、LoRA 训练、SMB 双机的 Windows 侧 | 见 §4 |
 | 6. 是否可以通过 systemd 运行？ | 待实现（`deploy/linux/`），WSL2 可验证 `systemctl --user` | Phase 4/5 |
 | 7. 是否可以安全更新？ | 待实现（`update.sh` 不动用户数据） | Phase 4 |
-| 8–10. 上游更新后多久发现 / 能否自动 CI / 自动 Release？ | 待实现（§14–§17 流水线） | Phase 7/8 |
+| 8–10. 上游更新后多久发现 / 能否自动 CI / 自动 Release？ | 按需人工发现与同步；分支 push/PR 自动 CI；Release 暂不自动化 | Phase 7/8 |
 | 11. 用户数据是否与程序更新完全分离？ | 是（程序在仓库/安装目录，数据由 `PROMPT_HUB_LIBRARY_ROOT` 指向） | Phase 4 验收 |
 | 12. 是否存在需要人工处理的 merge conflict？ | 预期不存在（纯新增 diff） | Phase 7 模拟上游提交 |
 | 13. 是否存在无法自动 rebase 的 Linux patch？ | 只有 G1 属于核心改动，若上游未接受则需人工处理 | Phase 7 |

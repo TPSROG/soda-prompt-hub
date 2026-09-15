@@ -153,10 +153,8 @@ fi
 
 # ---------------------------------------------------------------- 3. 目录
 printf -- '\n--- 用户数据目录 ---\n'
-if [[ "${LIBRARY_ROOT}" == "${DATA_HOME}/library" ]]; then
-    mkdir -p "${DATA_HOME}"
-    chmod 700 "${DATA_HOME}"
-fi
+mkdir -p "${DATA_HOME}"
+chmod 0700 "${DATA_HOME}"
 mkdir -p "${LIBRARY_ROOT}/database" "${MODELS_ROOT}"
 sph_ok "资料库: ${LIBRARY_ROOT}"
 sph_ok "模型:   ${MODELS_ROOT}"
@@ -188,15 +186,9 @@ if [[ "${INSTALL_SERVICE}" -eq 1 ]]; then
     UNIT_PATH="$(sph_unit_path)"
     mkdir -p "$(dirname -- "${UNIT_PATH}")"
     TEMPLATE="${SCRIPT_DIR}/${SPH_SERVICE_NAME}.service"
-    [[ -f "${TEMPLATE}" ]] || sph_die "缺少服务模板：${TEMPLATE}"
-    UNIT_CONTENT="$(cat "${TEMPLATE}")"
-    UNIT_CONTENT="${UNIT_CONTENT//__SPH_REPO__/${REPO_ROOT}}"
-    UNIT_CONTENT="${UNIT_CONTENT//__SPH_LIBRARY_ROOT__/${LIBRARY_ROOT}}"
-    UNIT_CONTENT="${UNIT_CONTENT//__SPH_MODELS_ROOT__/${MODELS_ROOT}}"
-    UNIT_CONTENT="${UNIT_CONTENT//__SPH_HOST__/${HOST}}"
-    UNIT_CONTENT="${UNIT_CONTENT//__SPH_PORT__/${PORT}}"
-    printf '%s\n' "${UNIT_CONTENT}" >"${UNIT_PATH}"
-    chmod 0644 "${UNIT_PATH}"
+    sph_write_core_unit \
+        "${TEMPLATE}" "${UNIT_PATH}" "${REPO_ROOT}" "${LIBRARY_ROOT}" "${MODELS_ROOT}" "${HOST}" "${PORT}" ||
+        sph_die "无法生成 systemd 用户服务"
     sph_ok "已写入 ${UNIT_PATH}"
 
     sph_systemd_daemon_reload
@@ -245,10 +237,10 @@ if [[ "${WITH_WORKER}" -eq 1 ]]; then
         WORKER_JSON="$(cat "${TEMPLATE}")"
         WORKER_JSON="${WORKER_JSON//__SPH_WORKER_BRIDGE_ROOT__/${WORKER_BRIDGE}}"
         printf '%s\n' "${WORKER_JSON}" >"${WORKER_CONFIG}"
-        chmod 0644 "${WORKER_CONFIG}"
         sph_ok "已生成配置: ${WORKER_CONFIG}"
         sph_warn "请先把 comfyui_url 改成你的 ComfyUI 地址，再启用 Worker"
     fi
+    chmod 0600 "${WORKER_CONFIG}"
 
     WORKER_LAUNCHER="$(sph_worker_launcher_path)"
     install -m 0755 "${SCRIPT_DIR}/soda-worker.sh" "${WORKER_LAUNCHER}"
@@ -291,12 +283,9 @@ PY
     if [[ "${INSTALL_SERVICE}" -eq 1 ]]; then
         WORKER_UNIT="$(sph_worker_unit_path)"
         WORKER_TEMPLATE="${SCRIPT_DIR}/soda-worker.service"
-        [[ -f "${WORKER_TEMPLATE}" ]] || sph_die "缺少 Worker 服务模板：${WORKER_TEMPLATE}"
-        WORKER_UNIT_CONTENT="$(cat "${WORKER_TEMPLATE}")"
-        WORKER_UNIT_CONTENT="${WORKER_UNIT_CONTENT//__SPH_REPO__/${REPO_ROOT}}"
-        WORKER_UNIT_CONTENT="${WORKER_UNIT_CONTENT//__SPH_WORKER_CONFIG__/${WORKER_CONFIG}}"
-        printf '%s\n' "${WORKER_UNIT_CONTENT}" >"${WORKER_UNIT}"
-        chmod 0644 "${WORKER_UNIT}"
+        sph_write_worker_unit \
+            "${WORKER_TEMPLATE}" "${WORKER_UNIT}" "${REPO_ROOT}" "${WORKER_CONFIG}" ||
+            sph_die "无法生成 Worker systemd 用户服务"
         sph_systemd_daemon_reload
         sph_ok "已写入 ${WORKER_UNIT}（默认不启用）"
         sph_info "改好 comfyui_url 后运行：systemctl --user enable --now soda-worker"
