@@ -5,3 +5,4 @@ deploy/windows-worker/*.bat -text whitespace=cr-at-eol
 # breaks on Linux/WSL even though it looks fine on Windows (core.autocrlf=true).
 *.sh text eol=lf
 deploy/linux/* text eol=lf
+deploy/linux/*.png binary -eol

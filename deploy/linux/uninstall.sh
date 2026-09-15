@@ -102,6 +102,20 @@ if [[ -f "${LAUNCHER}" ]]; then
     sph_ok "已移除 ${LAUNCHER}"
 fi
 
+DESKTOP_ENTRY="$(sph_desktop_entry_path)"
+DESKTOP_ICON="$(sph_desktop_icon_path)"
+if [[ -f "${DESKTOP_ENTRY}" ]]; then
+    rm -f "${DESKTOP_ENTRY}"
+    sph_ok "已移除 ${DESKTOP_ENTRY}"
+fi
+if [[ -f "${DESKTOP_ICON}" ]]; then
+    rm -f "${DESKTOP_ICON}"
+    sph_ok "已移除 ${DESKTOP_ICON}"
+fi
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database "$(dirname -- "${DESKTOP_ENTRY}")" >/dev/null 2>&1 || true
+fi
+
 # ---------------------------------------------------------------- 2. 用户数据
 printf '\n'
 if ((PURGE == 0)); then

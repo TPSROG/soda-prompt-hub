@@ -16,6 +16,7 @@
 | Linux 原生运行 | 已验证：`uv sync --locked` + `uv run --no-sync prompt-hub serve` |
 | Linux 部署层 | `deploy/linux/`：安装 / 卸载 / 更新 / 启停 / 状态 + systemd **user** unit |
 | Linux 便利命令 | `soda-prompt-hub`（start/stop/restart/status/logs/serve/update） |
+| Linux 轻量启动器 | 用户级 Desktop Entry + 图标；启动/复用 Core 后打开默认浏览器 |
 | Linux 测试 | `tests/linux/`：启动、数据目录、路径、HTTP 契约 |
 | Linux CI | `.github/workflows/linux.yml`：只补上游没有的部分（Ubuntu 22.04/24.04 矩阵 + 部署冒烟） |
 | 上游同步 | 固定维护分支 `linux/main`；按需从临时分支合并 `upstream/main`，通过 PR 回合 |
@@ -29,7 +30,7 @@
 | Linux Compute Worker（ComfyUI 执行端） | Windows 实体（GUI/托盘/本机服务管理），需先抽协议，属后续独立设计 |
 | SMB 双机配对 | 上游实现硬编码 macOS（`remote_routes.py:85`、`/usr/bin/open`） |
 | LoRA 正式训练 | 上游本身也在 Windows 训练工具中完成 |
-| 桌面宿主（启动器 GUI） | 上游宿主为 C#/WinForms 与 Swift；Linux 第一版用 systemd + 浏览器 |
+| 嵌入式桌面宿主 / 托盘 | 上游宿主为 C#/WinForms 与 Swift；Linux 轻量版用 Desktop Entry + systemd + 浏览器 |
 | `.deb` / `.rpm` / AppImage / Snap / Flatpak | 主任务书 §18 |
 | Docker | 主任务书 §19 |
 
@@ -116,8 +117,9 @@ curl http://127.0.0.1:8765/api/health
 
 ### Phase 8｜Release
 
-第一阶段不在 Linux-only 分支启用自动 Release。需要发行时，从已通过 Linux CI 的 `linux/main` 手动产出
-`soda-prompt-hub-linux-x86_64.tar.gz` 与 `SHA256SUMS`。
+第一阶段不在 Linux-only 分支启用自动 Release。需要发行时，从已通过 Linux CI 的 `linux/main` 使用
+`scripts/build_linux_release.py` 手动产出带版本、架构和日期的 `tar.gz`、`LINUX_RELEASE.json` 与
+`SHA256SUMS`。
 
 ### Phase 9｜文档
 
@@ -246,6 +248,13 @@ docs(linux): add Linux installation guide
 ### Phase 9｜文档 — ✅ 完成
 
 `docs/linux/INSTALL.md`、`docs/linux/UPDATE.md`、README 的 Linux 章节（含 `Experimental` 支持矩阵与 Linux 数据目录）、`CHANGELOG.md` 的 Linux 条目。
+
+### Phase 8.1｜轻量桌面启动器与可复现发行包 — ✅ 已实现，待 Linux CI 验证
+
+- 安装用户级 Desktop Entry 与标准 256×256 hicolor 图标，不需要 root。
+- `soda-prompt-hub open` 会启动或复用 Core、核对健康状态，并通过 `xdg-open` / `gio open` 打开工作台。
+- headless CI 使用 `PROMPT_HUB_LAUNCHER_SKIP_OPEN=1` 验证完整启动链，不伪造图形桌面。
+- `scripts/build_linux_release.py` 生成确定时间戳、固定 uid/gid 与规范权限的可复现源码 tar.gz。
 
 ### Phase 6 的真实验证（push 之后的 2026-09-14 晚）
 
