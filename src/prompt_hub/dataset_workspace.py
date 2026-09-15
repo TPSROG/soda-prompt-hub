@@ -35,7 +35,15 @@ REVIEW_STATUSES = {"pending", "approved", "excluded", "needs_review"}
 
 BROWSE_IMAGE_COUNT_LIMIT = 500
 BROWSE_MAX_SUBDIRS = 400
-BROWSE_HOME_SHORTCUTS = (("Desktop", "桌面"), ("Pictures", "图片"), ("Downloads", "下载"))
+# XDG key -> (fallback directory name, UI label). Linux writes the key into
+# ~/.config/user-dirs.dirs, so localized desktops (桌面 / ダウンロード / …) still resolve.
+BROWSE_HOME_SHORTCUTS = (
+    ("XDG_DESKTOP_DIR", "Desktop", "桌面"),
+    ("XDG_PICTURES_DIR", "Pictures", "图片"),
+    ("XDG_DOWNLOAD_DIR", "Downloads", "下载"),
+)
+# macOS mounts removable volumes under /Volumes; Linux uses these bases.
+BROWSE_VOLUME_BASES = (Path("/Volumes"), Path("/media"), Path("/run/media"), Path("/mnt"))
 
 ARCHIVE_JOB_TYPE = "dataset_archive_import"
 ARCHIVE_ALLOWED_SUFFIXES = IMAGE_SUFFIXES | {".txt", ".json"}
@@ -453,10 +461,8 @@ class DatasetWorkspaceStore:
     def _browse_quick_entries(self, roots: list[Path]) -> list[dict[str, Any]]:
         home = roots[0] if roots else Path.home().resolve()
         quick = [{"label": "主目录", "path": str(home), "available": home.is_dir()}]
-        for name, label in BROWSE_HOME_SHORTCUTS:
-            candidate = home / name
-            if candidate.is_dir():
-                quick.append({"label": label, "path": str(candidate), "available": True})
+        for candidate, label in home_shortcuts(home):
+            quick.append({"label": label, "path": str(candidate), "available": True})
         quick.extend(
             {"label": volume.name, "path": str(volume), "available": volume.is_dir()}
             for volume in roots[1:]
@@ -614,20 +620,95 @@ def _collect_source_files(source: Path) -> tuple[list[Path], list[Path]]:
 
 def browse_roots() -> list[Path]:
     roots = [Path.home().resolve()]
-    volumes = Path("/Volumes")
-    if volumes.is_dir():
-        try:
-            with os.scandir(volumes) as entries:
-                for entry in sorted(entries, key=lambda item: item.name.lower()):
-                    try:
-                        if entry.is_symlink() or not entry.is_dir():
-                            continue
-                        roots.append(Path(entry.path).resolve())
-                    except OSError:
-                        continue
-        except OSError:
-            pass
+    for volume in _volume_roots():
+        if volume not in roots:
+            roots.append(volume)
     return roots
+
+
+def _volume_roots() -> list[Path]:
+    """Mounted volumes the directory browser may reach.
+
+    macOS keeps removable disks in /Volumes; Linux puts them in /media/<user>,
+    /run/media/<user> (udisks) or /mnt. Without this, a Linux user could not browse a
+    dataset that lives on a second disk.
+    """
+    found: list[Path] = []
+    for base in _volume_bases():
+        for entry in _directory_entries(base):
+            if entry not in found:
+                found.append(entry)
+    return found
+
+
+def _volume_bases() -> list[Path]:
+    """Concrete per-user mount bases; the literal /media is not where udisks mounts."""
+    home_name = Path.home().name
+    return [
+        base / home_name if str(base).startswith(("/media", "/run/media")) else base
+        for base in BROWSE_VOLUME_BASES
+    ]
+
+
+def _directory_entries(base: Path) -> list[Path]:
+    """Direct subdirectories of ``base``, skipping symlinks (and never failing hard)."""
+    try:
+        if not base.is_dir():
+            return []
+    except OSError:
+        return []
+    found: list[Path] = []
+    try:
+        with os.scandir(base) as entries:
+            for entry in sorted(entries, key=lambda item: item.name.lower()):
+                try:
+                    if entry.is_symlink() or not entry.is_dir():
+                        continue
+                    found.append(Path(entry.path).resolve())
+                except OSError:
+                    continue
+    except OSError:
+        return []
+    return found
+
+
+def home_shortcuts(home: Path) -> list[tuple[Path, str]]:
+    """Quick-jump entries inside ``home``, following XDG user-dirs when available."""
+    configured = _xdg_user_dirs(home)
+    shortcuts: list[tuple[Path, str]] = []
+    for key, fallback, label in BROWSE_HOME_SHORTCUTS:
+        candidate = configured.get(key) or (home / fallback)
+        try:
+            if not candidate.is_dir():
+                continue
+        except OSError:
+            continue
+        if any(candidate == existing for existing, _ in shortcuts):
+            continue
+        shortcuts.append((candidate, label))
+    return shortcuts
+
+
+def _xdg_user_dirs(home: Path) -> dict[str, Path]:
+    """Read ``user-dirs.dirs`` (written by xdg-user-dirs) if it exists."""
+    config_home = Path(os.environ.get("XDG_CONFIG_HOME") or (home / ".config"))
+    try:
+        text = (config_home / "user-dirs.dirs").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {}
+    values: dict[str, Path] = {}
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, raw_value = line.partition("=")
+        value = raw_value.strip().strip('"')
+        if not value:
+            continue
+        expanded = value.replace("$HOME", str(home))
+        candidate = Path(expanded).expanduser()
+        values[key.strip()] = candidate.resolve() if candidate.is_absolute() else home / candidate
+    return values
 
 
 def _browse_root_label(scope: Path, roots: list[Path]) -> str:

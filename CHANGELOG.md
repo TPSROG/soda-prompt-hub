@@ -15,6 +15,9 @@
 - 固定维护分支使用 `linux/main`；上游同步与发行暂由维护者手动执行，不在非默认分支放置无法触发的
   `schedule` / `workflow_run` 工作流。
 - 新增 `scripts/linux/check-env.sh` 环境自检；Linux 文档见 `docs/linux/`。
+- 修复：数据集目录浏览现在覆盖 Linux 外接卷（`/media/<用户>`、`/run/media/<用户>`、`/mnt`，
+  跳过符号链接），不再只认 macOS 的 `/Volumes`；主目录快捷入口改为读取 XDG `user-dirs.dirs`，
+  中文/日文等本地化桌面（`~/桌面`、`~/下载`…）也能显示。
 - 新增 Linux Compute Worker（实验性）：`install.sh --with-worker` 准备桥接目录、`soda-worker` 命令与
   systemd 单元；Worker 从桥接目录领取任务、调用 ComfyUI HTTP API 出图并回传带 sha256 的结果。
   协议层已在 Linux 上端到端验证（真 Worker + 真桥接 + 假 ComfyUI，无需 GPU）；LoRA 正式训练仍仅限 Windows。

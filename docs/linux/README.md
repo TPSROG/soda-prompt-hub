@@ -125,8 +125,8 @@ PR 的 `head_sha` 后使用写权限。
 
 | 项目 | 说明 | 出处 |
 | --- | --- | --- |
-| 数据集目录浏览不含外接卷 | `browse_roots()` 只认 `$HOME` 与 macOS `/Volumes`；Linux 的 `/media`、`/mnt` 不在范围内 | 审计 §11 F1 |
-| 主目录快捷入口仅英文名 | `Desktop / Pictures / Downloads`，中文等 locale 下不显示（有 `is_dir()` 保护，不报错） | 审计 §11 F2 |
+| ~~数据集目录浏览不含外接卷~~ | ✅ 已修复：现在覆盖 `/media/<用户>`、`/run/media/<用户>`、`/mnt` | 审计 §13 |
+| ~~主目录快捷入口仅英文名~~ | ✅ 已修复：改为读取 XDG `user-dirs.dirs`，本地化目录也能显示 | 审计 §13 |
 | 使用模式语义 | ✅ 已修复：Linux 现在是 `linux_local` 本机模式（审计 G1/G2） | 审计 §13 |
 | Compute Worker | 本机 ComfyUI 执行端仍仅限 Windows | 审计 §6 |
 

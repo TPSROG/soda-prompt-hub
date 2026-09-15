@@ -180,8 +180,8 @@ Soda Prompt Hub Linux 适配审计报告（第一阶段交付物）。
 
 | 能力 | 状态 | 原因 | 处理方式 |
 | --- | --- | --- | --- |
-| 数据集工作区目录浏览的“外接卷” | **受限** | `browse_roots()` 只认 `$HOME` 与 macOS 的 `/Volumes`，Linux 上的 `/media`、`/mnt` 不在浏览范围内（见 §11 F1） | 需要时把资料放进主目录或用符号链接接入；修法建议走上游 PR |
-| 主目录快捷入口（桌面 / 图片 / 下载） | **受限** | 固定英文目录名，中文等其他 locale 的 Linux 上不显示；有 `is_dir()` 保护，不会报错（见 §11 F2） | 低优先，可与 locale 适配一起反哺上游 |
+| 数据集工作区目录浏览的“外接卷” | ✅ 已修复 | `browse_roots()` 现在同时枚举 `/Volumes`（macOS）与 `/media/<用户>`、`/run/media/<用户>`、`/mnt`（Linux），跳过符号链接并去重（见 §13） | — |
+| 主目录快捷入口（桌面 / 图片 / 下载） | ✅ 已修复 | 改为读取 XDG `user-dirs.dirs`，本地化目录（`~/桌面`、`~/下载`…）与英文目录名都能识别（见 §13） | — |
 | Compute Worker（ComfyUI 执行端） | **暂不支持** | Worker 是 Windows 实体（GUI/托盘/`.bat`/`.ps1`/本机服务管理） | 标注 `Linux unsupported / future work`；未来需另立设计（HTTP/WebSocket 协议 + CLI daemon） |
 | SMB 双机配对 | **暂不支持** | 见 G2，实现硬编码 macOS + GVFS 桌面会话 | 标注不支持，不提供入口 |
 | LoRA 正式训练 | **暂不支持** | 上游本身也在 Windows 训练工具中完成 | 标注不支持 |
@@ -393,8 +393,8 @@ Soda Prompt Hub Linux 适配审计报告（第一阶段交付物）。
 | G1 | 使用模式只有 `windows_local` / `mac_remote`，Linux 落入 macOS 远端语义 | ✅ 已修复：新增 `linux_local`（`src/prompt_hub/usage_modes.py`，commit `4c28d3f`） |
 | G2 | Linux 侧需要 SMB 语义才能与计算端协作 | ✅ 已解决：Core 与 Worker 走本地桥接目录，`install.sh --with-worker` 自动登记本机节点；配对入口在本机模式下隐藏 |
 | — | `comfyui_url` 被限制为本机 http，且 HTTP 客户端不带认证 | ✅ 已修复：支持任意 `http(s)` 主机与 URL 内嵌 Basic 认证（commit `0af44d5`） |
-| F1 | 数据集目录浏览不含 Linux 外接卷（`/media`、`/mnt`） | ⬜ 未修复（可用符号链接规避） |
-| F2 | 主目录快捷入口仅识别英文目录名 | ⬜ 未修复 |
+| F1 | 数据集目录浏览不含 Linux 外接卷（`/media`、`/mnt`） | ✅ 已修复：`browse_roots()` 枚举 `/media/<用户>`、`/run/media/<用户>`、`/mnt`，跳过符号链接与重复项 |
+| F2 | 主目录快捷入口仅识别英文目录名 | ✅ 已修复：改为读取 XDG `user-dirs.dirs`（`XDG_DESKTOP_DIR` / `XDG_PICTURES_DIR` / `XDG_DOWNLOAD_DIR`），缺失时回退英文名 |
 
 Linux Compute Worker 已用真实 ComfyUI 端到端出图验证，详见 `docs/linux/WORKER.md`。
 
