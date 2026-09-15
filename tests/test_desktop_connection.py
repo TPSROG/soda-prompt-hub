@@ -46,6 +46,11 @@ def heartbeat(**overrides):
     }
 
 
+# The "two minutes ahead" timestamp is created when the test runs rather than when
+# pytest collects the parameters: a collected value drifts with the suite runtime.
+_FUTURE_TIMESTAMP = object()
+
+
 @pytest.mark.parametrize(
     ("changes", "state"),
     [
@@ -55,11 +60,20 @@ def heartbeat(**overrides):
         ({"protocol_version": "wrong"}, "incompatible"),
         ({"checked_at": "invalid"}, "stale"),
         ({"checked_at": (datetime.now(UTC) - timedelta(minutes=2)).isoformat()}, "stale"),
-        ({"checked_at": (datetime.now(UTC) + timedelta(minutes=2)).isoformat()}, "stale"),
+        ({"checked_at": _FUTURE_TIMESTAMP}, "stale"),
     ],
 )
 def test_connection_only_reports_fresh_live_worker(connection_store, changes, state):
     store, bridge = connection_store
+    if changes.get("checked_at") is _FUTURE_TIMESTAMP:
+        # Must be computed here. `connection_summary` treats a heartbeat as stale only
+        # when it is more than 15s in the future, so a timestamp captured at collection
+        # time lands in the "0~15s ahead" window on slow machines and this stale case
+        # would read as connected.
+        changes = {
+            **changes,
+            "checked_at": (datetime.now(UTC) + timedelta(minutes=2)).isoformat(),
+        }
     (bridge / "worker-heartbeat.json").write_text(json.dumps(heartbeat(**changes)))
     result = connection_summary(store)
     assert result["state"] == state
