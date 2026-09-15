@@ -180,6 +180,11 @@ case ":${PATH}:" in
     *) sph_warn "$(dirname -- "${LAUNCHER}") 不在 PATH 中；请把 export PATH=\"\$HOME/.local/bin:\$PATH\" 加入 ~/.bashrc" ;;
 esac
 
+printf -- '\n--- 桌面入口 ---\n'
+sph_install_desktop_integration "${REPO_ROOT}" || sph_die "无法安装桌面入口"
+sph_ok "应用菜单：$(sph_desktop_entry_path)"
+sph_ok "应用图标：$(sph_desktop_icon_path)"
+
 # ---------------------------------------------------------------- 6. systemd 服务
 if [[ "${INSTALL_SERVICE}" -eq 1 ]]; then
     printf -- '\n--- systemd 用户服务 ---\n'
@@ -330,6 +335,7 @@ printf '资料库: %s\n' "${LIBRARY_ROOT}"
 printf '模型:   %s\n' "${MODELS_ROOT}"
 printf '地址:   http://%s:%s\n' "${HOST}" "${PORT}"
 printf '记录:   %s\n' "${ENV_FILE}"
+printf '桌面:   应用菜单中的 Soda Prompt Hub（或运行 soda-prompt-hub open）\n'
 if [[ "${WITH_WORKER}" -eq 1 ]]; then
     printf '\nCompute Worker:\n'
     printf '  配置: %s\n' "$(sph_worker_config_path)"

@@ -46,12 +46,17 @@ uv run --no-sync prompt-hub backup --destination ~/soda-backup
 
 ```bash
 sha256sum -c SHA256SUMS
-tar -xzf soda-prompt-hub-linux-x86_64-<新版本>.tar.gz
+tar -xzf soda-prompt-hub-linux-x86_64-<新版本>-<日期>.tar.gz
 rsync -a --delete soda-prompt-hub/src/ <程序目录>/src/
 rsync -a soda-prompt-hub/deploy/ <程序目录>/deploy/
-cp soda-prompt-hub/pyproject.toml soda-prompt-hub/uv.lock <程序目录>/
-cd <程序目录> && ./deploy/linux/update.sh --ref <已验证的提交或标签>
+rsync -a soda-prompt-hub/scripts/ <程序目录>/scripts/
+cp soda-prompt-hub/pyproject.toml soda-prompt-hub/uv.lock soda-prompt-hub/RELEASE.json <程序目录>/
+cd <程序目录> && ./deploy/linux/install.sh --force
 ```
+
+源码 tar.gz 不包含 Git 历史，所以包安装使用上面的覆盖方式；只有 `git clone` 安装才使用
+`soda-prompt-hub update`。重复运行 `install.sh --force` 会刷新依赖、systemd unit、便利命令、应用菜单入口
+和图标，不会删除资料库、数据库或模型。
 
 ## 回滚
 

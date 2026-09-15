@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEPLOY_LINUX = REPO_ROOT / "deploy" / "linux"
@@ -29,6 +30,7 @@ SHELL_SCRIPTS = (
     "start.sh",
     "stop.sh",
     "status.sh",
+    "launch.sh",
     "soda-prompt-hub.sh",
     "soda-worker.sh",
 )
@@ -42,9 +44,21 @@ def _text(name: str) -> str:
 
 
 def test_deploy_linux_layout_exists() -> None:
-    extra = ("soda-prompt-hub.service", "soda-worker.service", "worker-config.example.json")
+    extra = (
+        "soda-prompt-hub.service",
+        "soda-prompt-hub.desktop",
+        "soda-prompt-hub.png",
+        "soda-worker.service",
+        "worker-config.example.json",
+    )
     missing = [name for name in (*SHELL_SCRIPTS, *extra) if not (DEPLOY_LINUX / name).is_file()]
     assert not missing, f"deploy/linux 缺少文件: {missing}"
+
+
+def test_desktop_icon_uses_a_standard_hicolor_size() -> None:
+    with Image.open(DEPLOY_LINUX / "soda-prompt-hub.png") as icon:
+        assert icon.size == (256, 256)
+        assert icon.mode == "RGBA"
 
 
 def test_scripts_declare_strict_mode_and_ignore_cwd() -> None:
@@ -229,6 +243,92 @@ def test_data_directories_follow_xdg_and_env_vars() -> None:
     assert "PROMPT_HUB_MODELS_ROOT" in install
     assert "PROMPT_HUB_LIBRARY_ROOT" in _text("start.sh")
     assert "PROMPT_HUB_MODELS_ROOT" in _text("start.sh")
+
+
+def test_desktop_launcher_starts_health_checks_and_opens_loopback_url() -> None:
+    launch = _text("launch.sh")
+    assert '"${SCRIPT_DIR}/start.sh"' in launch
+    assert "sph_health_ok" in launch
+    assert "xdg-open" in launch
+    assert "gio open" in launch
+    assert "notify-send" in launch
+    assert "PROMPT_HUB_LAUNCHER_SKIP_OPEN" in launch
+    assert 'APP_URL="$(sph_app_url)"' in launch
+
+    command = _text("soda-prompt-hub.sh")
+    assert "soda-prompt-hub open" in command
+    assert "run_deploy launch.sh" in command
+
+
+def test_desktop_entry_is_installed_updated_and_removed() -> None:
+    template = _text("soda-prompt-hub.desktop")
+    for field in (
+        "Type=Application",
+        "Exec=__SPH_LAUNCHER_EXEC__ open",
+        "Icon=soda-prompt-hub",
+        "Terminal=false",
+        "StartupNotify=true",
+    ):
+        assert field in template
+
+    assert "sph_install_desktop_integration" in _text("install.sh")
+    assert "sph_install_desktop_integration" in _text("update.sh")
+    uninstall = _text("uninstall.sh")
+    assert "sph_desktop_entry_path" in uninstall
+    assert "sph_desktop_icon_path" in uninstall
+
+
+def test_rendered_desktop_entry_escapes_exec_field_codes(tmp_path: Path) -> None:
+    launcher = tmp_path / "home 100% $soda" / ".local" / "bin" / "soda-prompt-hub"
+    output = tmp_path / "soda-prompt-hub.desktop"
+    bash = shutil.which("bash")
+    assert bash is not None
+    render = subprocess.run(  # noqa: S603 - fixed shell and sourced project file
+        [
+            bash,
+            "-c",
+            'source "$1"; sph_write_desktop_entry "$2" "$3" "$4"',
+            "bash",
+            str(DEPLOY_LINUX / "lib.sh"),
+            str(DEPLOY_LINUX / "soda-prompt-hub.desktop"),
+            str(output),
+            str(launcher),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert render.returncode == 0, render.stderr
+    rendered = output.read_text(encoding="utf-8")
+    expected = str(launcher).replace("$", r"\$").replace("%", "%%")
+    assert f'Exec="{expected}" open' in rendered
+    assert "__SPH_LAUNCHER_EXEC__" not in rendered
+
+
+def test_client_urls_normalize_wildcard_and_ipv6_hosts() -> None:
+    bash = shutil.which("bash")
+    assert bash is not None
+
+    def render(host: str) -> str:
+        result = subprocess.run(  # noqa: S603 - fixed shell and sourced project file
+            [
+                bash,
+                "-c",
+                'source "$1"; SPH_HOST="$2"; SPH_PORT=8765; sph_app_url',
+                "bash",
+                str(DEPLOY_LINUX / "lib.sh"),
+                host,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        return result.stdout
+
+    assert render("127.0.0.1") == "http://127.0.0.1:8765"
+    assert render("::") == "http://[::1]:8765"
+    assert render("::1") == "http://[::1]:8765"
 
 
 def test_update_is_fast_forward_only_and_data_safe() -> None:

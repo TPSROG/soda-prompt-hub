@@ -89,6 +89,13 @@ sph_ok "依赖已同步"
 # shellcheck source=lib.sh
 source "${SCRIPT_DIR}/lib.sh"
 
+printf -- '\n--- 更新命令与桌面入口 ---\n'
+LAUNCHER="$(sph_launcher_path)"
+mkdir -p "$(dirname -- "${LAUNCHER}")"
+install -m 0755 "${SCRIPT_DIR}/soda-prompt-hub.sh" "${LAUNCHER}"
+sph_install_desktop_integration "${SPH_REPO}" || sph_die "无法更新桌面入口"
+sph_ok "便利命令与桌面入口已更新"
+
 printf -- '\n--- 更新服务配置 ---\n'
 UNITS_REFRESHED=0
 if sph_service_installed; then

@@ -57,6 +57,19 @@ sph_launcher_path() {
     printf '%s/.local/bin/soda-prompt-hub' "${HOME}"
 }
 
+sph_desktop_entry_path() {
+    printf '%s/applications/soda-prompt-hub.desktop' "${XDG_DATA_HOME:-${HOME}/.local/share}"
+}
+
+sph_desktop_icon_path() {
+    printf '%s/icons/hicolor/256x256/apps/soda-prompt-hub.png' \
+        "${XDG_DATA_HOME:-${HOME}/.local/share}"
+}
+
+sph_desktop_log_path() {
+    printf '%s/logs/launcher.log' "$(sph_data_home)"
+}
+
 sph_worker_launcher_path() {
     printf '%s/.local/bin/soda-worker' "${HOME}"
 }
@@ -89,6 +102,73 @@ sph_abs_path() {
         "~"/*) printf '%s%s' "${HOME}" "${path#\~}" ;;
         *) printf '%s/%s' "$(pwd)" "${path}" ;;
     esac
+}
+
+sph_desktop_exec_quote() {
+    # Desktop Entry 的 Exec 使用自己的参数语法；引号内的这些字符仍需反斜杠转义，
+    # 百分号则必须写成 %% 才不会被当作 field code。
+    local value="$1"
+    case "${value}" in
+        *$'\n'* | *$'\r'*)
+            sph_err "Desktop Entry 路径不能包含换行符"
+            return 1
+            ;;
+    esac
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    value="${value//\`/\\\`}"
+    value="${value//\$/\\\$}"
+    value="${value//%/%%}"
+    printf '"%s"' "${value}"
+}
+
+sph_write_desktop_entry() {
+    local template="$1" output="$2" launcher="$3"
+    local line launcher_exec
+    [[ -f "${template}" ]] || {
+        sph_err "缺少 Desktop Entry 模板：${template}"
+        return 1
+    }
+    launcher_exec="$(sph_desktop_exec_quote "${launcher}")" || return 1
+    mkdir -p "$(dirname -- "${output}")"
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+        if [[ "${line}" == "Exec=__SPH_LAUNCHER_EXEC__ open" ]]; then
+            printf 'Exec=%s open\n' "${launcher_exec}"
+        else
+            printf '%s\n' "${line}"
+        fi
+    done <"${template}" >"${output}"
+    if grep -q "__SPH_LAUNCHER_EXEC__" "${output}"; then
+        sph_err "Desktop Entry 模板仍有未替换占位符"
+        rm -f "${output}"
+        return 1
+    fi
+    chmod 0644 "${output}"
+}
+
+sph_install_desktop_integration() {
+    local repo="$1"
+    local entry icon launcher
+    entry="$(sph_desktop_entry_path)"
+    icon="$(sph_desktop_icon_path)"
+    launcher="$(sph_launcher_path)"
+    [[ -x "${launcher}" ]] || {
+        sph_err "缺少已安装的便利命令：${launcher}"
+        return 1
+    }
+    [[ -f "${repo}/deploy/linux/soda-prompt-hub.png" ]] || {
+        sph_err "缺少桌面图标：${repo}/deploy/linux/soda-prompt-hub.png"
+        return 1
+    }
+    mkdir -p "$(dirname -- "${icon}")"
+    install -m 0644 "${repo}/deploy/linux/soda-prompt-hub.png" "${icon}"
+    sph_write_desktop_entry \
+        "${repo}/deploy/linux/soda-prompt-hub.desktop" \
+        "${entry}" \
+        "${launcher}" || return 1
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database "$(dirname -- "${entry}")" >/dev/null 2>&1 || true
+    fi
 }
 
 sph_safe_purge_path() {
@@ -177,8 +257,21 @@ sph_serve_command() {
     fi
 }
 
+sph_client_host() {
+    local host="${SPH_HOST:-${SPH_DEFAULT_HOST}}"
+    case "${host}" in
+        "::") printf '[::1]' ;;
+        *:*) printf '[%s]' "${host}" ;;
+        *) printf '%s' "${host}" ;;
+    esac
+}
+
+sph_app_url() {
+    printf 'http://%s:%s' "$(sph_client_host)" "${SPH_PORT:-${SPH_DEFAULT_PORT}}"
+}
+
 sph_health_url() {
-    printf 'http://%s:%s/api/health' "${SPH_HOST:-${SPH_DEFAULT_HOST}}" "${SPH_PORT:-${SPH_DEFAULT_PORT}}"
+    printf '%s/api/health' "$(sph_app_url)"
 }
 
 sph_health_ok() {

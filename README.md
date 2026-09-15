@@ -27,6 +27,7 @@ Linux 支持由社区适配分支提供，状态为 **Experimental**，不随官
 | --- | --- |
 | Core：资料库、创作、审核、数据集整理 | 支持 |
 | systemd 用户服务、安装 / 更新 / 卸载脚本 | 支持 |
+| 应用菜单启动器 | 支持：点击后启动或复用 Core，并在默认浏览器打开工作台 |
 | Compute Worker（ComfyUI 出图执行端） | **实验性支持**（`install.sh --with-worker`，见 [Linux Worker](docs/linux/WORKER.md)） |
 | SMB 双机配对 | 暂不支持（Linux 用本地桥接目录代替） |
 | LoRA 正式训练 | 暂不支持（仅 Windows） |
