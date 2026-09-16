@@ -60,6 +60,27 @@ def test_home_shortcuts_fall_back_to_english_names(tmp_path: Path) -> None:
     assert [path.name for path, _ in shortcuts] == ["Pictures", "Downloads"]
 
 
+def test_home_shortcuts_mix_xdg_and_english_names(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    (home / "桌面").mkdir(parents=True)
+    (home / "Downloads").mkdir()
+    _write_user_dirs(home, ['XDG_DESKTOP_DIR="$HOME/桌面"'])
+
+    shortcuts = home_shortcuts(home)
+    # the configured entry takes the XDG name; the unconfigured one falls back to English
+    assert [path.name for path, _ in shortcuts] == ["桌面", "Downloads"]
+
+
+def test_home_shortcut_constants_keep_the_upstream_shape() -> None:
+    shortcuts = dataset_workspace.BROWSE_HOME_SHORTCUTS
+    # callers unpack (name, label); keep the shape we inherited from upstream
+    assert all(isinstance(entry, tuple) and len(entry) == 2 for entry in shortcuts)
+    # every shortcut needs an XDG key, otherwise it silently loses its localized name
+    assert set(dataset_workspace.BROWSE_XDG_HOME_KEYS) == {name for name, _ in shortcuts}
+    keys = dataset_workspace.BROWSE_XDG_HOME_KEYS.values()
+    assert all(key.startswith("XDG_") for key in keys)
+
+
 def test_home_shortcuts_skip_missing_directories(tmp_path: Path) -> None:
     home = tmp_path / "home"
     home.mkdir()

@@ -35,13 +35,15 @@ REVIEW_STATUSES = {"pending", "approved", "excluded", "needs_review"}
 
 BROWSE_IMAGE_COUNT_LIMIT = 500
 BROWSE_MAX_SUBDIRS = 400
-# XDG key -> (fallback directory name, UI label). Linux writes the key into
-# ~/.config/user-dirs.dirs, so localized desktops (桌面 / ダウンロード / …) still resolve.
-BROWSE_HOME_SHORTCUTS = (
-    ("XDG_DESKTOP_DIR", "Desktop", "桌面"),
-    ("XDG_PICTURES_DIR", "Pictures", "图片"),
-    ("XDG_DOWNLOAD_DIR", "Downloads", "下载"),
-)
+BROWSE_HOME_SHORTCUTS = (("Desktop", "桌面"), ("Pictures", "图片"), ("Downloads", "下载"))
+# Linux localizes the directory names above. xdg-user-dirs records the real locations in
+# ~/.config/user-dirs.dirs, so 桌面 / ダウンロード / … resolve as well. This stays a separate
+# mapping so BROWSE_HOME_SHORTCUTS keeps the shape other callers already expect.
+BROWSE_XDG_HOME_KEYS = {
+    "Desktop": "XDG_DESKTOP_DIR",
+    "Pictures": "XDG_PICTURES_DIR",
+    "Downloads": "XDG_DOWNLOAD_DIR",
+}
 # macOS mounts removable volumes under /Volumes; Linux uses these bases.
 BROWSE_VOLUME_BASES = (Path("/Volumes"), Path("/media"), Path("/run/media"), Path("/mnt"))
 
@@ -676,8 +678,9 @@ def home_shortcuts(home: Path) -> list[tuple[Path, str]]:
     """Quick-jump entries inside ``home``, following XDG user-dirs when available."""
     configured = _xdg_user_dirs(home)
     shortcuts: list[tuple[Path, str]] = []
-    for key, fallback, label in BROWSE_HOME_SHORTCUTS:
-        candidate = configured.get(key) or (home / fallback)
+    for name, label in BROWSE_HOME_SHORTCUTS:
+        key = BROWSE_XDG_HOME_KEYS.get(name, "")
+        candidate = configured.get(key) or (home / name)
         try:
             if not candidate.is_dir():
                 continue
