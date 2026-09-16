@@ -1,7 +1,11 @@
 # Linux 安装指南
 
-> 状态：**Experimental**（实验性，非官方构建）。核心功能可用，Compute Worker 不在此范围内。
-> 支持范围与证据见 [兼容性审计](COMPATIBILITY_AUDIT.md)，开发环境见 [开发环境](DEV_ENVIRONMENT.md)。
+> 状态：**Experimental**（实验性，非官方构建）。核心功能可用；Compute Worker 为实验性支持，见 [Linux Worker](WORKER.md)。
+> 支持范围与证据见 [兼容性审计](COMPATIBILITY_AUDIT.md)，开发环境见 [开发环境](DEV_ENVIRONMENT.md)，
+> 最终验收结论见 [ACCEPTANCE.md](ACCEPTANCE.md)。
+>
+> 文档路径说明：主任务书中写作 `docs/LINUX_INSTALL.md`，本分支实际路径为 `docs/linux/INSTALL.md`，
+> 映射关系与原因见 [文档位置说明](README.md#文档位置说明)。
 
 ## 前置条件
 

@@ -3,6 +3,9 @@
 本机 Linux 开发/测试环境的实际状态，用于本地验证 Soda Prompt Hub 的 Linux 兼容性。
 本文件**不包含任何密码、Token、API Key 或私钥**。
 
+> 文档路径说明：主任务书中写作 `docs/LINUX_DEV_ENVIRONMENT.md`，本分支实际路径为
+> `docs/linux/DEV_ENVIRONMENT.md`，映射关系与原因见 [文档位置说明](README.md#文档位置说明)。
+
 记录时间：2026-09-14（首次建立）
 
 ## Host

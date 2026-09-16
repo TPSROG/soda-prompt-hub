@@ -1,6 +1,9 @@
 # Linux 更新指南
 
 > 本文描述如何安全更新本机 Linux 上的 Soda Prompt Hub，并保证用户数据不被改动。
+>
+> 文档路径说明：主任务书中写作 `docs/LINUX_UPDATE.md`，本分支实际路径为 `docs/linux/UPDATE.md`，
+> 映射关系与原因见 [文档位置说明](README.md#文档位置说明)；最终验收结论见 [ACCEPTANCE.md](ACCEPTANCE.md)。
 
 ## 更新做了什么
 

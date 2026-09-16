@@ -7,11 +7,13 @@
 **一句话**：在不破坏上游 macOS / Windows 功能的前提下，让 Soda Prompt Hub 在 Linux 上原生运行，
 并建立一套跟随上游更新、自动测试、自动构建的长效维护机制。
 
-**当前状态**：Ubuntu 24.04 实测通过；GitHub Actions 四个作业全绿；向上游提交了 2 个修复 PR。
-Linux 侧改动几乎全是新增文件，核心代码只动了两处真实缺陷。上游基线 `1.1.1`（`upstream/main` = `e96249b`）。
+**当前状态**：Ubuntu 24.04 实测通过；GitHub Actions 四个作业全绿；向上游提交的 PR #20 / #21（缺陷修复）
+与 #22（Linux 适配）均已合并，维护者随后追加 #23（桌面启动器与发行打包）。Linux 侧改动几乎全是新增文件；
+既有文件只有小幅度增量修改。基线版本 `1.1.1`。**最终验收结论见 [ACCEPTANCE.md](ACCEPTANCE.md)。**
 
 ## 目录
 
+- [文档位置说明](#文档位置说明)
 - [快速开始](#快速开始)
 - [支持状态](#支持状态)
 - [这个分支做了什么](#这个分支做了什么)
@@ -19,7 +21,24 @@ Linux 侧改动几乎全是新增文件，核心代码只动了两处真实缺�
 - [上游同步机制](#上游同步机制)
 - [已知限制](#已知限制)
 - [怎么验证](#怎么验证)
+- [最终验收](#最终验收)
 - [文档索引](#文档索引)
+
+## 文档位置说明
+
+主任务书把 Linux 文档写成 `docs/LINUX_*.md`（顶层），本分支**没有**采用这些路径，而是统一放在
+`docs/linux/` 子目录。原因是上游 `tests/test_public_docs.py` 硬性要求 `docs/*.md`（顶层）**恰好**
+是 12 个既有文件，新增顶层文件会直接让上游测试变红。
+
+| 主任务书路径 | 实际路径 |
+| --- | --- |
+| `docs/LINUX_COMPATIBILITY_AUDIT.md` | [COMPATIBILITY_AUDIT.md](COMPATIBILITY_AUDIT.md) |
+| `docs/LINUX_INSTALL.md` | [INSTALL.md](INSTALL.md) |
+| `docs/LINUX_UPDATE.md` | [UPDATE.md](UPDATE.md) |
+| `docs/LINUX_DEV_ENVIRONMENT.md` | [DEV_ENVIRONMENT.md](DEV_ENVIRONMENT.md) |
+| （§29 最终验收） | [ACCEPTANCE.md](ACCEPTANCE.md) |
+| （§9 Linux Worker） | [WORKER.md](WORKER.md) |
+| （实施计划与证据） | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) |
 
 ## 快速开始
 
@@ -132,7 +151,7 @@ PR 的 `head_sha` 后使用写权限。
 | ~~数据集目录浏览不含外接卷~~ | ✅ 已修复：现在覆盖 `/media/<用户>`、`/run/media/<用户>`、`/mnt` | 审计 §13 |
 | ~~主目录快捷入口仅英文名~~ | ✅ 已修复：改为读取 XDG `user-dirs.dirs`，本地化目录也能显示 | 审计 §13 |
 | 使用模式语义 | ✅ 已修复：Linux 现在是 `linux_local` 本机模式（审计 G1/G2） | 审计 §13 |
-| Compute Worker | 本机 ComfyUI 执行端仍仅限 Windows | 审计 §6 |
+| LoRA 正式训练 | 仍仅限 Windows；Linux Worker 只支持 `comfyui_generate` 出图任务 | [WORKER.md](WORKER.md) |
 
 ## 怎么验证
 
@@ -146,10 +165,17 @@ uv run pytest -q                        # 完整套件（577 passed / 9 skipped�
 CI：仓库 **Actions → Linux**，四个作业 —— `格式 / Lint / 类型检查`、`Tests on ubuntu-22.04`、
 `Tests on ubuntu-24.04`、`systemd 用户服务`（在真实 runner 上执行安装、状态检查、健康检查与卸载）。
 
+## 最终验收
+
+主任务书 §29 的 13 个问题与 §27 的第一阶段验收标准，逐条结论、证据与残留都写在
+[ACCEPTANCE.md](ACCEPTANCE.md)。其中**未交付或已降级**的条目（自动同步、自动发布、上游更新验收、
+文档落位偏差、`9c7dbda` 未上游）在该文件的"未闭合项"里明确列出，不要按"全部完成"理解。
+
 ## 文档索引
 
 | 文档 | 内容 |
 | --- | --- |
+| [ACCEPTANCE.md](ACCEPTANCE.md) | 主任务书 §27 / §29 的最终验收结论与未闭合项 |
 | [INSTALL.md](INSTALL.md) | 安装步骤、参数、目录布局、排错 |
 | [UPDATE.md](UPDATE.md) | 安全更新、回滚、从发行包更新 |
 | [COMPATIBILITY_AUDIT.md](COMPATIBILITY_AUDIT.md) | 平台耦合审计（§10 实测、§11 复核、§12 CI 发现） |

@@ -227,6 +227,9 @@ Soda Prompt Hub Linux 适配审计报告（第一阶段交付物）。
 
 ## 9. 与验收标准对照（主任务书 §27 / §29）
 
+> **本表是实施前的预期答案，保留作为计划依据。**实施完成后的逐条结论、证据与残留见
+> [ACCEPTANCE.md](ACCEPTANCE.md)。
+
 | 验收问题 | 当前答案（基于本次审计） | 验证方式 |
 | --- | --- | --- |
 | 1. Linux 核心是否可以独立运行？ | 预期可以（上游 CI 已在 Ubuntu 跑通测试与构建） | Phase 3 实机 `uv run --no-sync prompt-hub serve` |
