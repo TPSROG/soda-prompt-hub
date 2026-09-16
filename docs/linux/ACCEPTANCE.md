@@ -74,3 +74,18 @@ uv run pytest -q                        # 完整套件
 
 CI 侧：仓库 **Actions → Linux**，四个作业 —— `格式 / Lint / 类型检查`、`Tests on ubuntu-22.04`、
 `Tests on ubuntu-24.04`、`systemd 用户服务`。
+
+## 五、本次验收的实测记录
+
+环境：WSL2 + Ubuntu 24.04.5 LTS，x86_64，2026-09-16，检出 `linux/main`。
+
+| 项目 | 命令 | 结果 |
+| --- | --- | --- |
+| 完整套件 | `uv run pytest -q` | **619 passed / 9 skipped**（165.65 s；9 个 skip 全部是 macOS 专属用例） |
+| Linux 专属用例 | `uv run pytest tests/linux -q` | **59 passed** |
+| 格式 | `uv run ruff format --check .` | 208 files already formatted |
+| Lint | `uv run ruff check .` | All checks passed |
+| 类型检查 | `uv run ty check src/` | All checks passed |
+
+单独跑子集时 `--cov` 的 80% 门槛会失败（覆盖率统计范围是整个 `src/`），这是设计如此，不是回归；
+完整套件下门槛通过。
