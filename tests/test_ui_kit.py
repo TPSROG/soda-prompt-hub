@@ -82,6 +82,17 @@ def test_ui_kit_text_pairs_stay_readable() -> None:
         assert _contrast(tokens[foreground], tokens[background]) >= 4.5, (foreground, background)
 
 
+def test_search_placeholder_text_stays_readable_on_dark_surface() -> None:
+    styles = (ROOT / "src/prompt_hub/web_assets/search.css").read_text(encoding="utf-8")
+    foreground = re.search(r"\.discovery-placeholder\s*\{[^}]*color:\s*var\((--[a-z-]+)\)", styles)
+    background = re.search(r"\.discovery-visual\s*\{[^}]*background:\s*var\((--[a-z-]+)\)", styles)
+    assert foreground is not None
+    assert background is not None
+
+    tokens = _tokens()
+    assert _contrast(tokens[foreground.group(1)], tokens[background.group(1)]) >= 4.5
+
+
 def test_tokenized_pages_use_defined_tokens_and_no_literal_colors() -> None:
     tokens = _tokens()
 
