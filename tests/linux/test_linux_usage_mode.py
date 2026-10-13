@@ -144,3 +144,17 @@ def test_folder_placeholders_follow_the_platform() -> None:
     windows = render_index_html("QA device", usage_mode="windows_local")
     assert 'placeholder="例如 D:/ComfyUI/output"' in windows
     assert "/Volumes/ComfyUI/output" not in windows
+
+
+def test_backup_placeholder_follows_the_platform() -> None:
+    """The backup destination box advertised a Windows drive letter everywhere."""
+    assert 'placeholder="例如 ~/PromptHub-Backups/2026-09-14"' in render_index_html(
+        "QA device", usage_mode=LINUX_LOCAL
+    )
+    assert "D:\\PromptHub-Backups" not in render_index_html("QA device", usage_mode=LINUX_LOCAL)
+    assert 'placeholder="例如 D:/PromptHub-Backups/2026-09-14"' in render_index_html(
+        "QA device", usage_mode="windows_local"
+    )
+    assert 'placeholder="例如 /Volumes/Backups/PromptHub/2026-09-14"' in render_index_html(
+        "QA device", usage_mode=MAC_REMOTE
+    )
