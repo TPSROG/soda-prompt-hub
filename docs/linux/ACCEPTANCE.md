@@ -11,8 +11,8 @@ Soda Prompt Hub Linux 适配的最终验收结论。本文件只回答两件事�
 
 | 项目 | 值 |
 | --- | --- |
-| 验收对象 | `linux/main` 维护分支（2026-09-16） |
-| 上游基线 | `upstream/linux/main`：Linux 适配已进入官方分支（PR #20 / #21 / #22 已合并），维护者随后追加 PR #23（桌面启动器与发行打包） |
+| 验收对象 | `linux/main` 维护分支（2026-10-13，已跟进上游 `v1.2.0`） |
+| 上游基线 | Linux 适配已全部进入官方分支：PR #20 / #21 / #22 / **#24** 均已合并，另有维护者的 PR #23（桌面启动器与发行打包）与加固提交 `4074173` |
 | 环境 A | WSL2 + Ubuntu 24.04.5 LTS，x86_64 — 见 [DEV_ENVIRONMENT.md](DEV_ENVIRONMENT.md) |
 | 环境 B | GitHub Actions `ubuntu-22.04` / `ubuntu-24.04` — 见 [`.github/workflows/linux.yml`](../../.github/workflows/linux.yml) |
 | 总体结论 | Core、部署、测试、CI、文档通过；**上游自动检测与自动发布未实现**（维护者决策），逐条见[未闭合项](#未闭合项) |
@@ -24,7 +24,7 @@ Soda Prompt Hub Linux 适配的最终验收结论。本文件只回答两件事�
 | # | 问题 | 结论 | 证据 | 残留 |
 | --- | --- | --- | --- | --- |
 | 1 | Linux 核心是否可以独立运行？ | **是** | WSL2 Ubuntu 24.04 实机 `prompt-hub serve` 启动，`GET /` 200、`/api/health` 返回 `status: ok`；CI 在 ubuntu-22.04 / 24.04 跑完整套件与构建 | 其他发行版与 aarch64 未验证 |
-| 2 | Linux 是否需要修改核心 Python 代码？ | **是，但改动量很小**：让它"能跑"不需要改核心，改的都是缺陷与平台语义 | 相对上游基线，既有文件只动了 16 个，且集中在：① `media.py`（新增）+ 4 个图片端点显式 `media_type`（已随 PR #20 合并）；② `usage_modes.py` 的 `linux_local`（已随 PR #22 合并）；③ `dataset_workspace.py` 的外接卷与 XDG 用户目录（`9c7dbda`，**未上游**）；④ 远端/带认证 ComfyUI（跨平台功能，非 Linux 专属） | ③ 仍只在本分支 |
+| 2 | Linux 是否需要修改核心 Python 代码？ | **是，但改动量很小**：让它"能跑"不需要改核心，改的都是缺陷与平台语义 | 相对上游基线，既有文件只动了 16 个，且集中在：① `media.py`（新增）+ 4 个图片端点显式 `media_type`（已随 PR #20 合并）；② `usage_modes.py` 的 `linux_local`（已随 PR #22 合并）；③ `dataset_workspace.py` 的外接卷与 XDG 用户目录（已随 PR #24 合并，维护者追加 `4074173` 的范围约束）；④ 远端/带认证 ComfyUI（跨平台功能，非 Linux 专属） | 无：四项都已在上游 |
 | 3 | Windows / macOS 是否受到影响？ | **未受影响** | 改动几乎全是新增文件；既有文件均为增量修改（如 `browse_roots()` 在保留 `/Volumes` 的基础上追加 `/media`、`/run/media`、`/mnt`）；无数据库 schema、数据格式或 API 变更；上游 `ci.yml` 继续全绿，两处修复已通过上游审核合入 | F1/F2 尚未经上游 macOS 用户使用验证 |
 | 4 | Linux Worker 是否已实现？ | **是（实验性、无 GUI）** | `install.sh --with-worker` 准备桥接目录、`soda-worker` 命令与 systemd 单元；协议端到端验证（真 Worker + 真桥接 + 假 ComfyUI，无需 GPU）；真实远端 ComfyUI 出图一次并逐个校验 sha256 — 见 [WORKER.md](WORKER.md) | 不含 LoRA 训练类任务；ComfyUI 凭据目前明文存于本机 `worker-config.json` |
 | 5 | 哪些功能仍然是 Windows-only？ | LoRA 正式训练；Windows Worker 的 GUI / 托盘宿主；官方 Setup 安装包（DMG 同理为 macOS 专属） | [支持状态](README.md#支持状态)、审计 §6 | 另：SMB 双机配对是 macOS-only；Linux 无桌面宿主/托盘，用轻量启动器 + 浏览器替代 |
@@ -35,7 +35,7 @@ Soda Prompt Hub Linux 适配的最终验收结论。本文件只回答两件事�
 | 10 | upstream 更新后能否自动生成 Linux Release？ | **否，且不会随 upstream 版本变化触发** | `scripts/build_linux_release.py` 已可产出可复现的 `soda-prompt-hub-linux-x86_64-<版本>-<日期>.tar.gz` + `SHA256SUMS` + `LINUX_RELEASE.json`，打包 → 解包 → 隔离安装 → 启动器启动全链路已实测；但由人工触发 | §17 属**部分交付**：产物形式达成，自动化未达成 |
 | 11 | 用户数据是否与程序更新完全分离？ | **是** | 程序在仓库目录（虚拟环境 `<repo>/.venv`），数据默认在 `$XDG_DATA_HOME/soda-prompt-hub/{library,models}`，安装记录为 `install.env`；更新不动数据目录（实测），卸载默认保留数据 | 数据目录位置由 `PROMPT_HUB_LIBRARY_ROOT` / `PROMPT_HUB_MODELS_ROOT` 决定，迁移需自行移动 |
 | 12 | 是否存在需要人工处理的 merge conflict？ | **目前没有，但属高概率事件** | 最近三次合并 `upstream → linux/main`（`ce5023b` / `44371ca` / `14bc4a0`）均以普通 merge 提交完成，无冲突处理痕迹 | 本分支目前有 1 处对上游活跃文件的改动（第 2 问的第 ③ 项）尚未上游化，一旦上游改到同一区域就必须人工解决 |
-| 13 | 是否存在 Linux-specific patch 无法自动 rebase？ | **有 1 处** | `9c7dbda` 对 `src/prompt_hub/dataset_workspace.py` 的改写在被上游接受前需要人工 rebase；其余 Linux 内容全部是新增文件（`deploy/linux/`、`tests/linux/`、`scripts/linux/`、`docs/linux/`、`.github/workflows/linux.yml`），可自动跟随 | 消除风险的动作只有一步：把 `9c7dbda` 拆成上游 PR |
+| 13 | 是否存在 Linux-specific patch 无法自动 rebase？ | **没有** | `9c7dbda` 已随 PR #24 进入上游，维护者在其上追加了 `4074173`；本分支现已采用上游版本，不再携带私有补丁。其余 Linux 内容全部是新增文件（`deploy/linux/`、`tests/linux/`、`scripts/linux/`、`docs/linux/`、`.github/workflows/linux.yml`），可自动跟随 | 无 |
 
 ## 二、主任务书 §27：第一阶段验收标准
 
@@ -60,7 +60,7 @@ Soda Prompt Hub Linux 适配的最终验收结论。本文件只回答两件事�
 | §17 | upstream 版本变化且 Linux CI 通过后自动发布 | **部分交付** | 打包脚本与产物形式已具备，触发仍为人工 |
 | §28 | 模拟上游提交验收同步链路 | **未执行** | 依赖 §15/§16，没有自动化就没有可验收的链路 |
 | §26 | 文档落在 `docs/LINUX_*.md` | **主动偏差** | 上游测试契约限制，映射关系见 [README](README.md#文档位置说明) |
-| — | `9c7dbda`（F1/F2）进入上游 | **待办** | 该提交目前只存在于本分支，上游没有；它也是第 13 问里唯一的 rebase 风险点 |
+| — | `9c7dbda`（F1/F2）进入上游 | **已完成** | 经 PR #24 合并，维护者追加 `4074173` 后本分支已采用上游版本；第 13 问的风险点消除 |
 
 ## 四、怎么自己复现这份验收
 
