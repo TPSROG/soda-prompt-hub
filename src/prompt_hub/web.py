@@ -58,6 +58,7 @@ def render_index_html(device_name: str, *, usage_mode: str | None = None) -> str
         raise ValueError(message)
     dataset_example, model_example = _usage_mode_examples(mode)
     output_example, mapping_example = _usage_mode_folder_examples(mode)
+    backup_example = _usage_mode_backup_example(mode)
     safe_name = device_name.strip() or (
         "Linux 绘图设备" if mode == LINUX_LOCAL else "Windows 绘图设备"
     )
@@ -80,6 +81,7 @@ def render_index_html(device_name: str, *, usage_mode: str | None = None) -> str
         .replace("__PROMPT_HUB_MODEL_PATH__", model_example)
         .replace("__PROMPT_HUB_OUTPUT_PATH__", output_example)
         .replace("__PROMPT_HUB_MAPPING_PATH__", mapping_example)
+        .replace("__PROMPT_HUB_BACKUP_PATH__", backup_example)
     )
 
 
@@ -103,3 +105,12 @@ def _usage_mode_folder_examples(mode: str) -> tuple[str, str]:
     if mode == LINUX_LOCAL:
         return "~/ComfyUI/output", "~/Libraries/krea2-style-explorer"
     return "/Volumes/ComfyUI/output", "/Volumes/Shared/krea2-style-explorer"
+
+
+def _usage_mode_backup_example(mode: str) -> str:
+    """Example destination for the full-backup box."""
+    if mode == "windows_local":
+        return "D:/PromptHub-Backups/2026-09-14"
+    if mode == LINUX_LOCAL:
+        return "~/PromptHub-Backups/2026-09-14"
+    return "/Volumes/Backups/PromptHub/2026-09-14"
