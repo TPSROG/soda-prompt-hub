@@ -57,6 +57,7 @@ def render_index_html(device_name: str, *, usage_mode: str | None = None) -> str
         message = f"Unsupported usage mode: {mode}"
         raise ValueError(message)
     dataset_example, model_example = _usage_mode_examples(mode)
+    output_example, mapping_example = _usage_mode_folder_examples(mode)
     safe_name = device_name.strip() or (
         "Linux 绘图设备" if mode == LINUX_LOCAL else "Windows 绘图设备"
     )
@@ -77,6 +78,8 @@ def render_index_html(device_name: str, *, usage_mode: str | None = None) -> str
         markup.replace("__PROMPT_HUB_USAGE_MODE__", mode)
         .replace("__PROMPT_HUB_DATASET_PATH__", dataset_example)
         .replace("__PROMPT_HUB_MODEL_PATH__", model_example)
+        .replace("__PROMPT_HUB_OUTPUT_PATH__", output_example)
+        .replace("__PROMPT_HUB_MAPPING_PATH__", mapping_example)
     )
 
 
@@ -87,3 +90,16 @@ def _usage_mode_examples(mode: str) -> tuple[str, str]:
     if mode == LINUX_LOCAL:
         return "~/Pictures/my-dataset", "~/models/vision_model.onnx"
     return "/Users/your-name/Pictures/my-dataset", "/Users/you/models/vision_model.onnx"
+
+
+def _usage_mode_folder_examples(mode: str) -> tuple[str, str]:
+    """Folder examples for ComfyUI output scanning and local source mapping.
+
+    Both boxes used to advertise Windows or macOS locations on every platform, which
+    pointed Linux users at directories that cannot exist on their machine.
+    """
+    if mode == "windows_local":
+        return "D:/ComfyUI/output", "D:/Libraries/krea2-style-explorer"
+    if mode == LINUX_LOCAL:
+        return "~/ComfyUI/output", "~/Libraries/krea2-style-explorer"
+    return "/Volumes/ComfyUI/output", "/Volumes/Shared/krea2-style-explorer"

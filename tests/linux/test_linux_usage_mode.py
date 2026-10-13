@@ -126,3 +126,21 @@ def test_linux_stale_heartbeat_names_the_linux_service_manager(
 def test_local_service_manager_labels() -> None:
     assert "启动器" in local_service_manager("windows_local")
     assert "deploy/linux" in local_service_manager(LINUX_LOCAL)
+
+
+def test_folder_placeholders_follow_the_platform() -> None:
+    """The ComfyUI output and source-mapping boxes used to advertise other platforms."""
+    markup = render_index_html("QA device", usage_mode=LINUX_LOCAL)
+    assert 'placeholder="例如 ~/ComfyUI/output"' in markup
+    assert 'placeholder="例如 ~/Libraries/krea2-style-explorer"' in markup
+    assert "D:\\ComfyUI\\output" not in markup
+    assert "/Volumes/ComfyUI/output" not in markup
+    assert "/Volumes/共享盘/画风库" not in markup
+
+    mac = render_index_html("QA device", usage_mode=MAC_REMOTE)
+    assert 'placeholder="例如 /Volumes/ComfyUI/output"' in mac
+    assert "D:\\ComfyUI\\output" not in mac
+
+    windows = render_index_html("QA device", usage_mode="windows_local")
+    assert 'placeholder="例如 D:/ComfyUI/output"' in windows
+    assert "/Volumes/ComfyUI/output" not in windows
