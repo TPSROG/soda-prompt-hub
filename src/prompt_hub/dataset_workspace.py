@@ -464,6 +464,8 @@ class DatasetWorkspaceStore:
         home = roots[0] if roots else Path.home().resolve()
         quick = [{"label": "主目录", "path": str(home), "available": home.is_dir()}]
         for candidate, label in home_shortcuts(home):
+            if not any(candidate.is_relative_to(root) for root in roots):
+                continue
             quick.append({"label": label, "path": str(candidate), "available": True})
         quick.extend(
             {"label": volume.name, "path": str(volume), "available": volume.is_dir()}
@@ -681,6 +683,8 @@ def home_shortcuts(home: Path) -> list[tuple[Path, str]]:
     for name, label in BROWSE_HOME_SHORTCUTS:
         key = BROWSE_XDG_HOME_KEYS.get(name, "")
         candidate = configured.get(key) or (home / name)
+        if candidate == home:
+            continue
         try:
             if not candidate.is_dir():
                 continue
